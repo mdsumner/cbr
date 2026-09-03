@@ -20,3 +20,5 @@ Config/rextendr/version: 0.5.0
 Depends: 
     R (>= 4.2)
 Config/roxygen2/version: 8.1.0
+URL: https://github.com/mdsumner/cbr
+BugReports: https://github.com/mdsumner/cbr/issues
