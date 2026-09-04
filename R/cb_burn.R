@@ -22,7 +22,7 @@
 #'
 #' @return An object of class `cb_burn`: a named list of five data frames with
 #'   the grid definition stored in attributes (`extent`, `dimension`, `crs`,
-#'   `coverage`). Indices are 1-based and row 1 is the top row; geometry `k`
+#'   `coverage`) and the number of input geometries in `n_geom`. Indices are 1-based and row 1 is the top row; geometry `k`
 #'   (input position) gets `id = k`.
 #'   \describe{
 #'     \item{`runs`}{`row`, `col_start`, `col_end`, `id`: fully covered cells.}
@@ -92,6 +92,7 @@ cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character
     dimension = dimension,
     crs = if (length(crs)) as.character(crs)[1L] else NA_character_,
     coverage = isTRUE(coverage),
+    n_geom = length(blobs),
     class = "cb_burn"
   )
 }

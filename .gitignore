@@ -8,3 +8,4 @@ src/Makevars.win
 .DS_Store
 .quarto
 .posit/assistant
+Rplots.pdf

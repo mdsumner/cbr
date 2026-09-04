@@ -9,7 +9,9 @@
 #'
 #' @param x A `cb_burn` object.
 #' @param extent Crop extent as `c(xmin, xmax, ymin, ymax)`, in the CRS of the
-#'   grid. It is snapped to the parent grid and intersected with it.
+#'   grid. It is snapped to the parent grid and intersected with it. If missing,
+#'   the burn is cropped to its content: the cells touched by any geometry
+#'   (see `content` in [summary.cb_burn()]).
 #' @param snap How to align `extent` to cell boundaries. `"out"` (default)
 #'   expands to the enclosing cells, `"in"` shrinks to fully contained cells,
 #'   `"near"` moves each edge to the nearest cell boundary.
@@ -31,6 +33,13 @@
 cb_crop <- function(x, extent, snap = c("out", "in", "near")) {
   if (!inherits(x, "cb_burn")) {
     stop("`x` must be a <cb_burn> object.", call. = FALSE)
+  }
+  if (missing(extent) || is.null(extent)) {
+    content <- content_extent(x)
+    if (is.null(content)) {
+      stop("burn is empty, no content to crop to.", call. = FALSE)
+    }
+    extent <- content$extent
   }
   if (length(extent) != 4L) {
     stop("`extent` must be a length-4 vector c(xmin, xmax, ymin, ymax).", call. = FALSE)
@@ -100,6 +109,7 @@ cb_crop <- function(x, extent, snap = c("out", "in", "near")) {
     dimension = c(ncol1, nrow1),
     crs = attr(x, "crs"),
     coverage = attr(x, "coverage"),
+    n_geom = attr(x, "n_geom"),
     parent = list(extent = ext0, dimension = dm0, offset = c(c0, r0)),
     class = "cb_burn"
   )

@@ -10,7 +10,9 @@ cb_crop(x, extent, snap = c("out", "in", "near"))
 \item{x}{A \code{cb_burn} object.}
 
 \item{extent}{Crop extent as \code{c(xmin, xmax, ymin, ymax)}, in the CRS of the
-grid. It is snapped to the parent grid and intersected with it.}
+grid. It is snapped to the parent grid and intersected with it. If missing,
+the burn is cropped to its content: the cells touched by any geometry
+(see \code{content} in \code{\link[=summary.cb_burn]{summary.cb_burn()}}).}
 
 \item{snap}{How to align \code{extent} to cell boundaries. \code{"out"} (default)
 expands to the enclosing cells, \code{"in"} shrinks to fully contained cells,

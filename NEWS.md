@@ -48,5 +48,32 @@ sparse scanline rasterization of polygons, lines, and points.
 * `cb_as_matrix()` reshapes a materialized vector (from `cb_materialize()` or
   `gdalraster::read_ds()`) into an `nrow x ncol` matrix oriented as on a map.
 
+## Summarizing and plotting
+
+* `summary()` for `cb_burn` describes a burn in time proportional to the
+  number of records, never to the number of cells: exact per-row and
+  per-column covered-cell marginals (the column marginal via a difference
+  array over run endpoints), the content extent of touched cells, per-geometry
+  area (interior cells, summed boundary fractions, line length, point count),
+  edge-fraction quantiles, and a coarse `overview` raster. `print()` reports
+  these, with `ascii = TRUE` for a text rendering of the overview.
+
+* `cb_overview()` aggregates a burn onto square tiles of `block` cells and
+  returns mean coverage per tile in the `read_ds` layout, so it is the same
+  shape as `cb_materialize()` and equal to it when `block = 1`. Runs spanning
+  several tiles are handled with a difference array along the tile row, so
+  the cost is records plus tiles regardless of block size.
+
+* `plot()` for `cb_burn` draws the grid extent with `asp = 1` and either every
+  record as a rectangle (`what = "exact"`: runs, edge cells shaded by
+  fraction, optionally coloured `by_id`) or the overview raster
+  (`what = "overview"`), switching automatically on a record-count
+  `threshold`. Marginal strips along the top and right show the exact column
+  and row totals even when the main panel is an overview.
+
+* `cb_crop()` with no `extent` crops to the content extent.
+
+* `cb_burn()` records the number of input geometries in attribute `n_geom`.
+
 * `print()` for `cb_burn` summarizes the grid, mode, table sizes, and (for a
   cropped burn) the offset within the parent grid.

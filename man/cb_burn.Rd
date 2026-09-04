@@ -29,7 +29,7 @@ coercible to character). Carried through to \code{\link[=cb_materialize]{cb_mate
 \value{
 An object of class \code{cb_burn}: a named list of five data frames with
 the grid definition stored in attributes (\code{extent}, \code{dimension}, \code{crs},
-\code{coverage}). Indices are 1-based and row 1 is the top row; geometry \code{k}
+\code{coverage}) and the number of input geometries in \code{n_geom}. Indices are 1-based and row 1 is the top row; geometry \code{k}
 (input position) gets \code{id = k}.
 \describe{
 \item{\code{runs}}{\code{row}, \code{col_start}, \code{col_end}, \code{id}: fully covered cells.}
