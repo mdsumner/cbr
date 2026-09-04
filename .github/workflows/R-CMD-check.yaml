@@ -44,6 +44,18 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
+      # R-devel's check greps the install log for "Downloading crates ..."
+      # and warns (CRAN policy: crates must be vendored). Vendoring here
+      # makes the build offline via src/Makevars, which unpacks the tarball
+      # when it exists. Regenerate and commit the tarball instead if the
+      # package is ever submitted to CRAN.
+      - name: Vendor Rust crates
+        working-directory: src/rust
+        run: |
+          cargo vendor --versioned-dirs vendor > vendor-config.toml
+          tar -cJf vendor.tar.xz vendor
+          rm -rf vendor
+
       - uses: r-lib/actions/check-r-package@v2
         with:
           upload-snapshots: true
