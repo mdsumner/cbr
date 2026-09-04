@@ -6,6 +6,20 @@
 \usage{
 cb_burn_wkb(wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage)
 }
+\arguments{
+\item{wkb}{List of raw vectors, one WKB blob per geometry.}
+
+\item{xmin, ymin, xmax, ymax}{Grid extent.}
+
+\item{ncol, nrow}{Grid dimensions.}
+
+\item{coverage}{Logical; exact coverage fractions if \code{TRUE}, cell-centre
+rule if \code{FALSE}.}
+}
+\value{
+A list of five lists (\code{runs}, \code{edges}, \code{lines}, \code{points}, \code{notes}),
+each a set of equal-length columns.
+}
 \description{
 Low-level worker behind \code{\link[=cb_burn]{cb_burn()}}. \code{wkb} is a list of raw vectors (one WKB
 blob per geometry, as produced by \code{wk::wkb()}). The grid is defined by its
@@ -15,5 +29,8 @@ fractions; \code{FALSE} uses the faster cell-centre (approx) rule.
 }
 \details{
 Returns a list of five column-oriented tables: \code{runs}, \code{edges}, \code{lines},
-\code{points}, and \code{notes}.
+\code{points}, and \code{notes}. The crate emits 0-based indices, half-open run
+ranges and \code{id = k}; this function converts to the R convention of 1-based
+\code{row}/\code{col}, inclusive \code{col_end}, and \code{id}/\code{geom_index} equal to the
+1-based input position.
 }

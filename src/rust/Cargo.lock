@@ -12,9 +12,9 @@ dependencies = [
 
 [[package]]
 name = "controlledburn"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86e91ed9808687ee3a4b1c089102ab28b2a23307d60b3b28008472b4c4de1927"
+checksum = "fb00c5d6a1212600e42077204e7a4696d81da04ebccb2570abb7ae296adb943f"
 
 [[package]]
 name = "extendr-api"

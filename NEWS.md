@@ -1,3 +1,14 @@
+# cbr 0.1.0
+
+## Crate
+
+* Built on controlledburn 0.2.0. The crate moved to 0-based indices,
+  half-open run ranges (`col_end` exclusive) and `id = k`; `cb_burn_wkb()`
+  converts at the boundary so R sees 1-based `row`/`col`, inclusive `col_end`
+  and `id`/`geom_index` equal to the 1-based input position. Nothing changes
+  for R code, and the `cb_burn` tables are identical to those from 0.1.0.
+
+
 # cbr 0.0.0.9000
 
 Initial development version. R bindings to the `controlledburn` Rust crate for

@@ -14,7 +14,17 @@ NULL
 #' fractions; `FALSE` uses the faster cell-centre (approx) rule.
 #'
 #' Returns a list of five column-oriented tables: `runs`, `edges`, `lines`,
-#' `points`, and `notes`.
+#' `points`, and `notes`. The crate emits 0-based indices, half-open run
+#' ranges and `id = k`; this function converts to the R convention of 1-based
+#' `row`/`col`, inclusive `col_end`, and `id`/`geom_index` equal to the
+#' 1-based input position.
+#' @param wkb List of raw vectors, one WKB blob per geometry.
+#' @param xmin,ymin,xmax,ymax Grid extent.
+#' @param ncol,nrow Grid dimensions.
+#' @param coverage Logical; exact coverage fractions if `TRUE`, cell-centre
+#'   rule if `FALSE`.
+#' @return A list of five lists (`runs`, `edges`, `lines`, `points`, `notes`),
+#'   each a set of equal-length columns.
 #' @export
 cb_burn_wkb <- function(wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage) .Call(wrap__cb_burn_wkb, wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage)
 
