@@ -5,6 +5,7 @@
 
 <!-- badges: start -->
 
+[![R-CMD-check](https://github.com/mdsumner/cbr/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mdsumner/cbr/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 `cbr` is an experimental R package built on the
@@ -55,7 +56,7 @@ pak::pak("mdsumner/cbr")
 library(cbr)
 ## get some polygons in wk form however you like
 geom <- geos::as_geos_geometry(geodata::world(path = tempdir()))
-#> Cached as: /perm_storage/home/data/r_tmp/RtmpUVapgm/gadm/gadm36_adm0_r5_pk.rds
+#> Cached as: /perm_storage/home/data/r_tmp/RtmpK3HJSy/gadm/gadm36_adm0_r5_pk.rds
 b <- cb_burn(geom)
 b
 #> <cb_burn>

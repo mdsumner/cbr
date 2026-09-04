@@ -17,6 +17,7 @@ knitr::opts_chunk$set(
 # cbr
 
 <!-- badges: start -->
+[![R-CMD-check](https://github.com/mdsumner/cbr/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mdsumner/cbr/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 `cbr` is an experimental R package built on the
