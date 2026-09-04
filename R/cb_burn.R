@@ -8,8 +8,12 @@
 #' @param geom Geometry input. Anything that [wk::as_wkb()] understands, e.g. a
 #'   `wk_wkb` vector, an `sf`/`sfc` column, or a list of raw WKB blobs.
 #' @param extent Grid extent as `c(xmin, xmax, ymin, ymax)` (the ordering used
-#'   by `terra::ext()`).
-#' @param dimension Grid dimensions as `c(ncol, nrow)`.
+#'   by `terra::ext()`). If missing, the bounding box of `geom` is used (via
+#'   [wk::wk_bbox()]).
+#' @param dimension Grid dimensions as `c(ncol, nrow)`. If missing, `ncol` is
+#'   256 and `nrow` is computed from it so that cells are square in the units
+#'   of `extent` (at least 1 row). A single value is taken as `ncol`, with
+#'   `nrow` computed the same way.
 #' @param coverage Logical. If `TRUE` (default) use exact coverage fractions
 #'   (boundary cells appear in `edges`). If `FALSE` use the faster cell-centre
 #'   ("approx", fasterize-style) rule, which emits runs only.
@@ -33,19 +37,40 @@
 #' library(wk)
 #' sq <- wkt("POLYGON ((2.5 4.5, 6.5 4.5, 6.5 8.5, 2.5 8.5, 2.5 4.5))")
 #' cb_burn(sq, extent = c(0, 10, 0, 10), dimension = c(10, 10))
+#'
+#' ## defaults: bbox of the geometry, 256 columns, square cells
+#' cb_burn(sq)
 #' }
 #' @export
 cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character_) {
+  geom <- wk::as_wkb(geom)
+
+  if (missing(extent) || is.null(extent)) {
+    extent <- as.numeric(wk::wk_bbox(geom))[c(1L, 3L, 2L, 4L)]
+  }
   if (length(extent) != 4L) {
     stop("`extent` must be a length-4 vector c(xmin, xmax, ymin, ymax).", call. = FALSE)
+  }
+  extent <- as.numeric(extent)
+  if (anyNA(extent) || extent[2L] <= extent[1L] || extent[4L] <= extent[3L]) {
+    stop("`extent` must be finite with xmax > xmin and ymax > ymin.", call. = FALSE)
+  }
+
+  if (missing(dimension) || is.null(dimension)) {
+    dimension <- 256L
+  }
+  if (length(dimension) == 1L) {
+    dimension <- c(dimension, default_nrow(extent, dimension))
   }
   if (length(dimension) != 2L) {
     stop("`dimension` must be a length-2 vector c(ncol, nrow).", call. = FALSE)
   }
-
-  blobs <- unclass(wk::as_wkb(geom))
-  extent <- as.numeric(extent)
   dimension <- as.integer(dimension)
+  if (anyNA(dimension) || any(dimension < 1L)) {
+    stop("`dimension` must be positive integers.", call. = FALSE)
+  }
+
+  blobs <- unclass(geom)
 
   res <- cb_burn_wkb(
     blobs,
@@ -71,6 +96,14 @@ cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character
   )
 }
 
+## Number of rows that gives (approximately) square cells for `ncol` columns
+## over `extent`; never fewer than one row.
+default_nrow <- function(extent, ncol) {
+  xr <- extent[2L] - extent[1L]
+  yr <- extent[4L] - extent[3L]
+  max(1L, as.integer(round(ncol * yr / xr)))
+}
+
 #' @export
 print.cb_burn <- function(x, ...) {
   ext <- attr(x, "extent")
@@ -79,6 +112,12 @@ print.cb_burn <- function(x, ...) {
   cat(sprintf("  grid:   %d col x %d row\n", dm[1L], dm[2L]))
   cat(sprintf("  extent: x[%g, %g] y[%g, %g]\n", ext[1L], ext[2L], ext[3L], ext[4L]))
   cat(sprintf("  mode:   %s\n", if (isTRUE(attr(x, "coverage"))) "coverage" else "approx"))
+  parent <- attr(x, "parent")
+  if (!is.null(parent)) {
+    cat(sprintf("  crop:   offset col %d row %d of %d x %d parent\n",
+                parent$offset[1L], parent$offset[2L],
+                parent$dimension[1L], parent$dimension[2L]))
+  }
   cat("  tables:", paste(sprintf("%s=%d", names(x), vapply(x, nrow, integer(1))),
                          collapse = ", "), "\n")
   invisible(x)

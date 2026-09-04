@@ -11,9 +11,13 @@ cb_burn(geom, extent, dimension, coverage = TRUE, crs = NA_character_)
 \code{wk_wkb} vector, an \code{sf}/\code{sfc} column, or a list of raw WKB blobs.}
 
 \item{extent}{Grid extent as \code{c(xmin, xmax, ymin, ymax)} (the ordering used
-by \code{terra::ext()}).}
+by \code{terra::ext()}). If missing, the bounding box of \code{geom} is used (via
+\code{\link[wk:wk_bbox]{wk::wk_bbox()}}).}
 
-\item{dimension}{Grid dimensions as \code{c(ncol, nrow)}.}
+\item{dimension}{Grid dimensions as \code{c(ncol, nrow)}. If missing, \code{ncol} is
+256 and \code{nrow} is computed from it so that cells are square in the units
+of \code{extent} (at least 1 row). A single value is taken as \code{ncol}, with
+\code{nrow} computed the same way.}
 
 \item{coverage}{Logical. If \code{TRUE} (default) use exact coverage fractions
 (boundary cells appear in \code{edges}). If \code{FALSE} use the faster cell-centre
@@ -46,5 +50,8 @@ returned with their exact coverage fraction.
 library(wk)
 sq <- wkt("POLYGON ((2.5 4.5, 6.5 4.5, 6.5 8.5, 2.5 8.5, 2.5 4.5))")
 cb_burn(sq, extent = c(0, 10, 0, 10), dimension = c(10, 10))
+
+## defaults: bbox of the geometry, 256 columns, square cells
+cb_burn(sq)
 }
 }
