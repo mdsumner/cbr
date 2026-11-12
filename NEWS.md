@@ -62,6 +62,10 @@ sparse scanline rasterization of polygons, lines, and points.
   temperature over a Southern Ocean sector. A 317 KB extract of the model's
   grid and one temperature field ships in `inst/extdata`. Suggests `ximage`.
 
+* The pkgdown site is built and deployed by GitHub Actions
+  (`.github/workflows/pkgdown.yaml`), with a hex logo drawn by cbr itself
+  (`data-raw/logo.R`).
+
 * `cb_relate()` and `cb_burn(relate = TRUE)` (also `cb_burn_index(relate = )`)
   add a sixth table, `relations`: for each polygon, the DE-9IM intersection
   matrix (nine characters, e.g. `"212F11FF2"`) against every cell whose closed
