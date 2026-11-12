@@ -1,0 +1,122 @@
+url: https://mdsumner.github.io/cbr/
+
+template:
+  bootstrap: 5
+  light-switch: true
+  theme: a11y-light
+  theme-dark: a11y-dark
+  bslib:
+    primary: "#c2410c"
+    dark: "#1c1917"
+    navbar-bg: "#1c1917"
+    link-color: "#c2410c"
+    link-hover-color: "#9a3412"
+    code-color: "#9a3412"
+    border-radius: 0.5rem
+    btn-border-radius: 0.5rem
+    headings-font-weight: 600
+    base_font: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    heading_font: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    code_font: "ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, monospace"
+
+navbar:
+  bg: dark
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, crate, github, lightswitch]
+  components:
+    articles:
+      text: Articles
+      menu:
+        - text: Grids beyond the lattice
+        - text: Rotated and sheared grids
+          href: articles/affine-grids.html
+        - text: Burning onto a model's native ocean grid
+          href: articles/native-ocean-grid.html
+    crate:
+      text: Rust crate
+      icon: fa-cube
+      menu:
+        - text: controlledburn-rs on GitHub
+          href: https://github.com/hypertidy/controlledburn-rs
+        - text: The controlledburn book
+          href: https://hypertidy.github.io/controlledburn-rs/
+        - text: API docs (docs.rs)
+          href: https://docs.rs/controlledburn
+        - text: crates.io
+          href: https://crates.io/crates/controlledburn
+
+home:
+  title: "cbr: sparse, exact rasterization from the controlledburn Rust crate"
+  description: >
+    R bindings to the controlledburn Rust crate: polygons, lines and points
+    burned onto grids as sparse runs and exact coverage fractions, on regular,
+    rotated, sheared and model-native grids, with DE-9IM predicates per cell.
+  sidebar:
+    structure: [links, crate, license, community, citation, authors, dev]
+    components:
+      crate:
+        title: Built on
+        text: >
+          [controlledburn](https://crates.io/crates/controlledburn), a
+          dependency-free Rust crate for sparse scanline rasterization with
+          exact coverage fractions, and [extendr](https://extendr.github.io/).
+
+reference:
+  - title: Burning
+    desc: >
+      Rasterize geometry onto a grid. The result is sparse: runs of fully
+      covered cells, boundary cells with their exact coverage fraction, and
+      tables for lines, points and notes.
+    contents:
+      - cb_burn
+      - cb_combine
+  - title: Rotated and sheared grids
+    desc: Burn onto affine grids given a GDAL geotransform, in index space.
+    contents:
+      - cb_burn_index
+      - cb_geotransform
+      - cb_cells
+  - title: Cropping and materializing
+    desc: >
+      Cut a burn to a window of its grid, and expand it to a dense raster in
+      the layout of `gdalraster::read_ds()`.
+    contents:
+      - cb_crop
+      - cb_materialize
+      - cb_as_matrix
+  - title: Summaries and plots
+    contents:
+      - summary.cb_burn
+      - cb_overview
+      - plot.cb_burn
+  - title: Cell predicates (DE-9IM)
+    desc: >
+      The DE-9IM relation of each polygon to the grid cells, exact where the
+      boundary touches a cell, and the predicates and masks that follow.
+    contents:
+      - cb_relate
+      - cb_matrix
+      - cb_cells_where
+      - cb_slivers
+  - title: Low-level bindings
+    desc: The functions that call into Rust, for building other front ends.
+    contents:
+      - cb_burn_wkb
+      - cb_relate_wkb
+
+articles:
+  - title: Grids beyond the lattice
+    navbar: ~
+    contents:
+      - affine-grids
+      - native-ocean-grid
+
+footer:
+  structure:
+    left: [developed_by, built_with]
+    right: [crate]
+  components:
+    crate: >
+      Rasterization by the [controlledburn](https://github.com/hypertidy/controlledburn-rs)
+      Rust crate.

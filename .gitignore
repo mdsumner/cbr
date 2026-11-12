@@ -9,3 +9,4 @@ src/Makevars.win
 .quarto
 .posit/assistant
 Rplots.pdf
+docs

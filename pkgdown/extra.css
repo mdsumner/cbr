@@ -1,0 +1,9 @@
+/* the version beside the package name: readable on the charcoal navbar */
+.navbar .nav-text.text-muted {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* a burnt-orange rule under the navbar */
+.navbar {
+  border-bottom: 3px solid #c2410c;
+}
