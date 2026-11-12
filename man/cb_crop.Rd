@@ -10,7 +10,9 @@ cb_crop(x, extent, snap = c("out", "in", "near"))
 \item{x}{A \code{cb_burn} object.}
 
 \item{extent}{Crop extent as \code{c(xmin, xmax, ymin, ymax)}, in the CRS of the
-grid. It is snapped to the parent grid and intersected with it. If missing,
+grid (for a burn from \code{\link[=cb_burn_index]{cb_burn_index()}}, in its index space: x is the
+column position and y counts rows up from the bottom). It is snapped to
+the parent grid and intersected with it. If missing,
 the burn is cropped to its content: the cells touched by any geometry
 (see \code{content} in \code{\link[=summary.cb_burn]{summary.cb_burn()}}).}
 

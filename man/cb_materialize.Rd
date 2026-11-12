@@ -47,6 +47,18 @@ handed straight to \code{gdalraster::plot_raster()} or wrapped as a matrix with
 Consider \code{\link[=cb_crop]{cb_crop()}} first when the parent grid is large and the geometry
 occupies only part of it.
 }
+\section{Affine grids}{
+
+For a burn from \code{\link[=cb_burn_index]{cb_burn_index()}} the cells are rotated or sheared, which
+the \code{gis} format cannot describe with a bounding box alone. The vector is
+still in grid order (row-major from the top-left cell, one element per
+cell), \code{bbox} is the bounding box of the grid's outline in world
+coordinates, and an extra element \code{geotransform} holds the six GDAL
+numbers that define where each cell is. Consumers that only read \code{bbox}
+and \code{dim} will place the raster approximately but with square, unrotated
+cells.
+}
+
 \examples{
 \dontrun{
 library(wk)

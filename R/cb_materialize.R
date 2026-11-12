@@ -29,6 +29,16 @@
 #'   }
 #' @param background Value for cells not touched by any geometry. Default `NA`.
 #'
+#' @section Affine grids:
+#' For a burn from [cb_burn_index()] the cells are rotated or sheared, which
+#' the `gis` format cannot describe with a bounding box alone. The vector is
+#' still in grid order (row-major from the top-left cell, one element per
+#' cell), `bbox` is the bounding box of the grid's outline in world
+#' coordinates, and an extra element `geotransform` holds the six GDAL
+#' numbers that define where each cell is. Consumers that only read `bbox`
+#' and `dim` will place the raster approximately but with square, unrotated
+#' cells.
+#'
 #' @return A numeric (`"coverage"`) or integer (`"id"`, `"count"`) vector of
 #'   length `ncol * nrow` with attribute `gis`, a list:
 #'   `type = "raster"`, `bbox = c(xmin, ymin, xmax, ymax)`,
@@ -102,13 +112,23 @@ cb_materialize <- function(x, value = c("coverage", "id", "count"), background =
   }
 
   crs <- attr(x, "crs")
-  attr(out, "gis") <- list(
+  gt <- attr(x, "geotransform")
+  bbox <- c(ext[1L], ext[3L], ext[2L], ext[4L])
+  if (!is.null(gt)) {
+    we <- attr(x, "world_extent")
+    bbox <- c(we[1L], we[3L], we[2L], we[4L])
+  }
+  gis <- list(
     type = "raster",
-    bbox = c(ext[1L], ext[3L], ext[2L], ext[4L]),
+    bbox = bbox,
     dim = c(ncol, nrow, 1),
     srs = if (is.null(crs) || is.na(crs)) "" else crs,
     datatype = datatype
   )
+  if (!is.null(gt)) {
+    gis$geotransform <- gt
+  }
+  attr(out, "gis") <- gis
   out
 }
 

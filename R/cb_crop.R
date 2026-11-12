@@ -9,7 +9,9 @@
 #'
 #' @param x A `cb_burn` object.
 #' @param extent Crop extent as `c(xmin, xmax, ymin, ymax)`, in the CRS of the
-#'   grid. It is snapped to the parent grid and intersected with it. If missing,
+#'   grid (for a burn from [cb_burn_index()], in its index space: x is the
+#'   column position and y counts rows up from the bottom). It is snapped to
+#'   the parent grid and intersected with it. If missing,
 #'   the burn is cropped to its content: the cells touched by any geometry
 #'   (see `content` in [summary.cb_burn()]).
 #' @param snap How to align `extent` to cell boundaries. `"out"` (default)
@@ -76,6 +78,19 @@ cb_crop <- function(x, extent, snap = c("out", "in", "near")) {
   ext1 <- c(ext0[1L] + c0 * resx, ext0[1L] + c1 * resx,
             ext0[4L] - r1 * resy, ext0[4L] - r0 * resy)
 
+  ## an affine grid's cropped window is another affine grid: move the origin
+  ## to the window's top-left cell and restart its index lattice at 0
+  gt0 <- attr(x, "geotransform")
+  gt1 <- NULL
+  we1 <- NULL
+  if (!is.null(gt0)) {
+    gt1 <- gt0
+    gt1[1L] <- gt0[1L] + c0 * gt0[2L] + r0 * gt0[3L]
+    gt1[4L] <- gt0[4L] + c0 * gt0[5L] + r0 * gt0[6L]
+    we1 <- affine_world_extent(gt1, c(ncol1, nrow1))
+    ext1 <- c(0, ncol1, 0, nrow1)
+  }
+
   in_rows <- function(row) row > r0 & row <= r1
   in_cols <- function(col) col > c0 & col <= c1
 
@@ -111,6 +126,8 @@ cb_crop <- function(x, extent, snap = c("out", "in", "near")) {
     coverage = attr(x, "coverage"),
     n_geom = attr(x, "n_geom"),
     id_offset = attr(x, "id_offset"),
+    geotransform = gt1,
+    world_extent = we1,
     parent = list(extent = ext0, dimension = dm0, offset = c(c0, r0)),
     class = "cb_burn"
   )

@@ -39,6 +39,21 @@ sparse scanline rasterization of polygons, lines, and points.
   the ids counts as empty geometries. `summary()`, `plot()` and `cb_crop()`
   respect the offset.
 
+* `cb_burn_index()` burns onto affine grids, rotated and sheared, given a GDAL
+  geotransform and `dimension`. Geometry is moved into index space by the
+  inverse of the geotransform and burned on a unit-cell lattice, so edge
+  fractions are exact fractions of each cell's own area, whatever its shape.
+  The result is a `cb_burn` whose `extent` is the index lattice, with the world
+  definition in attributes `geotransform`, `world_extent` and `crs`.
+  `cb_geotransform()` builds a geotransform from an origin, cell size,
+  rotation and shear. `cb_cells()` returns the cells as world-space polygons
+  for plotting. `cb_crop()` moves an affine burn's origin to the window,
+  `cb_combine()` requires matching geotransforms, and `cb_materialize()` adds
+  `geotransform` to the `gis` list (with `bbox` the world bounding box of the
+  grid's outline). `lines$length` is in world units on grids whose cells are
+  similar to squares, and in cell units, with a warning, otherwise. See the
+  "Rotated and sheared grids" vignette for a gallery.
+
 ## Burning
 
 * `cb_burn()` rasterizes any geometry that `wk::as_wkb()` understands onto a

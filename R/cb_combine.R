@@ -15,8 +15,8 @@
 #'   leave a gap in the ids those geometries count as empty. `parent` is kept
 #'   when all inputs agree on it.
 #'
-#' @details All inputs must have identical `extent`, `dimension`, `crs` and
-#'   `coverage`, and their id ranges `(id_offset, id_offset + n_geom]` must not
+#' @details All inputs must have identical `extent`, `dimension`, `crs`,
+#'   `coverage` and (for [cb_burn_index()] burns) `geotransform`, and their id ranges `(id_offset, id_offset + n_geom]` must not
 #'   overlap; otherwise an error is raised rather than silently merging
 #'   different geometries under one id.
 #'
@@ -45,7 +45,7 @@ cb_combine <- function(...) {
   }
 
   first <- xs[[1L]]
-  for (a in c("extent", "dimension", "crs", "coverage")) {
+  for (a in c("extent", "dimension", "crs", "coverage", "geotransform")) {
     same <- vapply(xs, function(x) identical(attr(x, a), attr(first, a)), logical(1))
     if (!all(same)) {
       stop(sprintf("burns differ in `%s`; they must share one grid.", a), call. = FALSE)
@@ -83,6 +83,8 @@ cb_combine <- function(...) {
     dimension = attr(first, "dimension"),
     crs = attr(first, "crs"),
     coverage = attr(first, "coverage"),
+    geotransform = attr(first, "geotransform"),
+    world_extent = attr(first, "world_extent"),
     n_geom = as.integer(max(hi) - min(lo)),
     id_offset = as.integer(min(lo)),
     parent = parent,

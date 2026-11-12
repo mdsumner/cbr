@@ -153,6 +153,13 @@ print.cb_burn <- function(x, ...) {
   cat("<cb_burn>\n")
   cat(sprintf("  grid:   %d col x %d row\n", dm[1L], dm[2L]))
   cat(sprintf("  extent: x[%g, %g] y[%g, %g]\n", ext[1L], ext[2L], ext[3L], ext[4L]))
+  gt <- attr(x, "geotransform")
+  if (!is.null(gt)) {
+    we <- attr(x, "world_extent")
+    cat(sprintf("  affine: geotransform c(%s)\n", paste(format(gt, digits = 6), collapse = ", ")))
+    cat(sprintf("  world:  x[%g, %g] y[%g, %g] (extent above is index space)\n",
+                we[1L], we[2L], we[3L], we[4L]))
+  }
   cat(sprintf("  mode:   %s\n", if (isTRUE(attr(x, "coverage"))) "coverage" else "approx"))
   parent <- attr(x, "parent")
   if (!is.null(parent)) {
