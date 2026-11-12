@@ -58,16 +58,17 @@ summary.cb_burn <- function(object, tiles = 256L, ...) {
   content <- content_extent(x)
 
   ## ---- per-geometry area -------------------------------------------------
+  off <- burn_id_offset(x)
   n <- attr(x, "n_geom")
   if (is.null(n)) {
-    n <- max(0L, runs$id, x$edges$id, x$lines$id, x$points$id)
+    n <- max(off, runs$id, x$edges$id, x$lines$id, x$points$id) - off
   }
   area <- data.frame(
-    id = seq_len(n),
-    interior = accumulate_into(numeric(n), runs$id, len),
-    boundary = accumulate_into(numeric(n), x$edges$id, x$edges$fraction),
-    lines = accumulate_into(numeric(n), x$lines$id, x$lines$length),
-    points = accumulate_into(numeric(n), x$points$id, 1)
+    id = off + seq_len(n),
+    interior = accumulate_into(numeric(n), runs$id - off, len),
+    boundary = accumulate_into(numeric(n), x$edges$id - off, x$edges$fraction),
+    lines = accumulate_into(numeric(n), x$lines$id - off, x$lines$length),
+    points = accumulate_into(numeric(n), x$points$id - off, 1)
   )
 
   fractions <- if (nrow(x$edges)) {

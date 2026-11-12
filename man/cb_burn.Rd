@@ -11,7 +11,8 @@ cb_burn(
   coverage = TRUE,
   crs = NA_character_,
   parity = FALSE,
-  threads = 1L
+  threads = 1L,
+  id_offset = 0L
 )
 }
 \arguments{
@@ -45,6 +46,13 @@ available. The result is identical to the serial burn. Threads only pay
 for large inputs (the crate uses at most one per 8192 units of work), and
 with more than one thread the input is parsed up front, which uses more
 memory.}
+
+\item{id_offset}{Non-negative whole number added to each geometry's position
+to give its \code{id} (and \code{geom_index} in \code{notes}), so \code{id = id_offset + k} for
+the \code{k}th input geometry. Burn consecutive slices of a collection with
+offsets \code{0}, \code{n1}, \code{n1 + n2}, ... and join them with \code{\link[=cb_combine]{cb_combine()}} to get
+exactly the burn of the whole collection. Recorded in attribute
+\code{id_offset}.}
 }
 \value{
 An object of class \code{cb_burn}: a named list of five data frames with

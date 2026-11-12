@@ -55,6 +55,9 @@ fn burn_wkb_threaded(
 /// @param threads Integer; number of threads, `0` for all available. With
 ///   more than one the input is parsed up front, and the crate uses at most
 ///   one thread per 8192 units of work, so small burns stay serial.
+/// @param id_offset Integer, non-negative; added to each geometry's position,
+///   so the `id` (and `geom_index`) columns are `id_offset` plus the 1-based
+///   input position.
 /// @return A list of five lists (`runs`, `edges`, `lines`, `points`, `notes`),
 ///   each a set of equal-length columns.
 /// @export
@@ -70,6 +73,7 @@ fn cb_burn_wkb(
     coverage: bool,
     parity: bool,
     threads: i32,
+    id_offset: i32,
 ) -> std::result::Result<List, Error> {
     // Keep the list elements alive and borrow their bytes in place rather
     // than copying every blob. Empty / non-raw elements become empty blobs,
@@ -83,7 +87,8 @@ fn cb_burn_wkb(
         BurnOptions::parity(mode)
     } else {
         BurnOptions::default().with_mode(mode)
-    };
+    }
+    .with_id_offset(id_offset);
 
     let burned = if threads == 1 {
         burn_wkb(blobs, &grid, opts)

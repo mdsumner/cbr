@@ -14,7 +14,8 @@ cb_burn_wkb(
   nrow,
   coverage,
   parity,
-  threads
+  threads,
+  id_offset
 )
 }
 \arguments{
@@ -34,6 +35,10 @@ for multi-part geometries (no merging).}
 \item{threads}{Integer; number of threads, \code{0} for all available. With
 more than one the input is parsed up front, and the crate uses at most
 one thread per 8192 units of work, so small burns stay serial.}
+
+\item{id_offset}{Integer, non-negative; added to each geometry's position,
+so the \code{id} (and \code{geom_index}) columns are \code{id_offset} plus the 1-based
+input position.}
 }
 \value{
 A list of five lists (\code{runs}, \code{edges}, \code{lines}, \code{points}, \code{notes}),

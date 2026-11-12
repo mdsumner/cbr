@@ -24,6 +24,12 @@
 #'   becomes a run), and adjacent runs on a row are coalesced. If `TRUE`, give
 #'   the records of the C++ 'controlledburn' core instead: one run per fully
 #'   covered boundary cell and separate records for each part.
+#' @param id_offset Non-negative whole number added to each geometry's position
+#'   to give its `id` (and `geom_index` in `notes`), so `id = id_offset + k` for
+#'   the `k`th input geometry. Burn consecutive slices of a collection with
+#'   offsets `0`, `n1`, `n1 + n2`, ... and join them with [cb_combine()] to get
+#'   exactly the burn of the whole collection. Recorded in attribute
+#'   `id_offset`.
 #' @param threads Number of threads, `1` (default) for none, `0` for all
 #'   available. The result is identical to the serial burn. Threads only pay
 #'   for large inputs (the crate uses at most one per 8192 units of work), and
@@ -53,7 +59,7 @@
 #' }
 #' @export
 cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character_,
-                    parity = FALSE, threads = 1L) {
+                    parity = FALSE, threads = 1L, id_offset = 0L) {
   geom <- wk::as_wkb(geom)
 
   if (missing(extent) || is.null(extent)) {
@@ -89,6 +95,14 @@ cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character
 
   blobs <- unclass(geom)
 
+  if (length(id_offset) != 1L || is.na(id_offset) || id_offset < 0 ||
+      id_offset != trunc(id_offset) ||
+      as.numeric(id_offset) + length(blobs) >= .Machine$integer.max) {
+    stop("`id_offset` must be a single non-negative whole number with ",
+         "`id_offset + length(geom)` below 2^31 - 1.", call. = FALSE)
+  }
+  id_offset <- as.integer(id_offset)
+
   res <- cb_burn_wkb(
     blobs,
     xmin = extent[1L], ymin = extent[3L],
@@ -96,7 +110,8 @@ cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character
     ncol = dimension[1L], nrow = dimension[2L],
     coverage = isTRUE(coverage),
     parity = isTRUE(parity),
-    threads = threads
+    threads = threads,
+    id_offset = id_offset
   )
 
   tables <- lapply(res, function(tbl) {
@@ -112,8 +127,15 @@ cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character
     crs = if (length(crs)) as.character(crs)[1L] else NA_character_,
     coverage = isTRUE(coverage),
     n_geom = length(blobs),
+    id_offset = id_offset,
     class = "cb_burn"
   )
+}
+
+## ids in a burn are `id_offset + position`; objects built without the
+## attribute have offset 0
+burn_id_offset <- function(x) {
+  attr(x, "id_offset") %||% 0L
 }
 
 ## Number of rows that gives (approximately) square cells for `ncol` columns

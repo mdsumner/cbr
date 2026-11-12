@@ -30,6 +30,15 @@ sparse scanline rasterization of polygons, lines, and points.
   with the same result as the serial burn. `0` uses all available threads;
   the default `1` is serial. Small burns stay serial regardless.
 
+* `cb_burn(id_offset = )` adds a non-negative offset to every geometry id (and
+  to `geom_index` in `notes`), recorded in attribute `id_offset`; `n_geom` stays
+  the number of input geometries. `cb_combine()` joins burns of consecutive
+  slices of a collection that share a grid (identical `extent`, `dimension`,
+  `crs` and `coverage`) into the burn of the whole, record for record,
+  whatever order they are given in. It refuses overlapping id ranges; a gap in
+  the ids counts as empty geometries. `summary()`, `plot()` and `cb_crop()`
+  respect the offset.
+
 ## Burning
 
 * `cb_burn()` rasterizes any geometry that `wk::as_wkb()` understands onto a

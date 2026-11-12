@@ -110,6 +110,7 @@ cb_crop <- function(x, extent, snap = c("out", "in", "near")) {
     crs = attr(x, "crs"),
     coverage = attr(x, "coverage"),
     n_geom = attr(x, "n_geom"),
+    id_offset = attr(x, "id_offset"),
     parent = list(extent = ext0, dimension = dm0, offset = c(c0, r0)),
     class = "cb_burn"
   )

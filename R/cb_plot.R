@@ -164,8 +164,9 @@ draw_exact <- function(x, col, by_id, detail = FALSE) {
   x0 <- function(col) ext[1L] + (col - 1L) * resx
   y1 <- function(row) ext[4L] - (row - 1L) * resy
   ramp <- function(v) col[pmax(1L, pmin(length(col), ceiling(v * length(col))))]
-  idcol <- function(id) grDevices::hcl.colors(max(1L, attr(x, "n_geom") %||% max(id)),
-                                              "Dark 3")[id]
+  off <- burn_id_offset(x)
+  idcol <- function(id) grDevices::hcl.colors(max(1L, attr(x, "n_geom") %||% max(id - off)),
+                                              "Dark 3")[id - off]
 
   r <- x$runs
   if (nrow(r)) {

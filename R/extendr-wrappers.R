@@ -29,9 +29,12 @@ NULL
 #' @param threads Integer; number of threads, `0` for all available. With
 #'   more than one the input is parsed up front, and the crate uses at most
 #'   one thread per 8192 units of work, so small burns stay serial.
+#' @param id_offset Integer, non-negative; added to each geometry's position,
+#'   so the `id` (and `geom_index`) columns are `id_offset` plus the 1-based
+#'   input position.
 #' @return A list of five lists (`runs`, `edges`, `lines`, `points`, `notes`),
 #'   each a set of equal-length columns.
 #' @export
-cb_burn_wkb <- function(wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage, parity, threads) .Call(wrap__cb_burn_wkb, wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage, parity, threads)
+cb_burn_wkb <- function(wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage, parity, threads, id_offset) .Call(wrap__cb_burn_wkb, wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage, parity, threads, id_offset)
 
 # nolint end
