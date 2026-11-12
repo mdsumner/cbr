@@ -24,8 +24,8 @@ longitude and latitude, which smooths the values and changes the cells. This
 vignette instead burns a polygon straight onto the model's own cells: the
 polygon is moved into the grid's *index space* (fractional column and row),
 burned on a lattice of unit cells, and the coverage of every model cell comes
-back exact. It covers the rectilinear part of the grid, south of 65°N, which
-is all of the Southern Ocean.
+back exact. It starts with the rectilinear part of the grid, south of 65°N,
+which is all of the Southern Ocean, and then goes into the tripolar cap.
 
 ## Native array order
 
@@ -361,17 +361,285 @@ about 21,000 km² along the slanted edges, and the cell-centre rule (whole
 cells whose centre is inside) gains some. For a field with sharp gradients at
 the polygon's edge, or for totals rather than means, those cells matter.
 
+## Into the tripolar cap
+
+North of 65°N the row and column are no longer separate functions of
+latitude and longitude, so walls cannot be found one axis at a time. The
+grid's own geometry gives the way in. Two facts about this grid, checked in
+the data:
+
+* the top row folds onto itself: corner `i` of the top row is the same point
+  as corner `358 - i`, so cell `i` of the top row meets cell `359 - i` across
+  its top edge, and the geographic North Pole lies on that fold, at column 90
+  (and, folded, 270);
+* the two singular points of the cap, where the grid's cells collapse, are at
+  65°N on 80°E and 100°W, on land.
+
+```{r fold}
+top <- 300
+## 0-based corner i against corner 358 - i: R columns 1:358 against 359:2
+dlon <- (geolon_c[top, 1:358] - geolon_c[top, 359:2] + 180) %% 360 - 180
+c(fold_corner_mismatch = max(abs(dlon), abs(geolat_c[top, 1:358] - geolat_c[top, 359:2])),
+  pole_column = which.max(geolat_t[top, ]))
+```
+
+### Cells as quadrilaterals, mapped by area
+
+Take each cap cell as the quadrilateral through its four corners, straight
+edged in a polar stereographic plane. Split it into four triangles at the
+mean of its corners. In any quadrilateral the triangles on opposite sides of
+that point hold exactly half its area between them, so there is a point inside
+the unit cell that splits it into four triangles with the same shares of area.
+Mapping each triangle affinely onto its partner gives a map from the plane to
+index space that is area-proportional within every cell: a fraction of the
+unit cell is the same fraction of the quadrilateral. This is the exact
+curvilinear method of the crate's `design/grid-frontends.md`.
+
+```{r cap-cells}
+## spherical polar stereographic, the North Pole at the origin
+stereo <- function(lon, lat) {
+  rho <- 2 * R * tan(pi / 4 - lat * pi / 360)
+  cbind(x = rho * sin(lon * pi / 180), y = -rho * cos(lon * pi / 180))
+}
+## cap cells, array rows 245 to 299 (0-based); the corners of cell (j, i) are
+## the corner points (j-1, i-1), (j-1, i), (j, i), (j, i-1), columns periodic
+cap <- expand.grid(i = 0:359, j = (nrect):299)
+corner <- function(j, i) stereo(geolon_c[cbind(j + 1, i %% 360 + 1)], geolat_c[cbind(j + 1, i %% 360 + 1)])
+SW <- corner(cap$j - 1, cap$i - 1); SE <- corner(cap$j - 1, cap$i)
+NE <- corner(cap$j, cap$i);         NW <- corner(cap$j, cap$i - 1)
+M <- (SW + SE + NE + NW) / 4
+tri_area <- function(a, b, c) abs((b[, 1] - a[, 1]) * (c[, 2] - a[, 2]) - (c[, 1] - a[, 1]) * (b[, 2] - a[, 2])) / 2
+A_b <- tri_area(SW, SE, M); A_r <- tri_area(SE, NE, M); A_t <- tri_area(NE, NW, M); A_l <- tri_area(NW, SW, M)
+A <- A_b + A_r + A_t + A_l
+c(cells = nrow(cap), opposite_pairs_off_half = max(abs((A_b + A_t) / A - 0.5), abs((A_l + A_r) / A - 0.5)))
+
+## each triangle in the plane and its image in index space (x: column, r: array
+## row, 0 at the south wall of row 0); the inner point is placed so that every
+## triangle keeps its share of the cell's area
+Mi <- cbind(cap$i + 2 * A_l / A, cap$j + 2 * A_b / A)
+I_SW <- cbind(cap$i, cap$j); I_SE <- I_SW + rep(c(1, 0), each = nrow(cap))
+I_NE <- I_SW + 1;            I_NW <- I_SW + rep(c(0, 1), each = nrow(cap))
+tri <- list(p1 = rbind(SW, SE, NE, NW), p2 = rbind(SE, NE, NW, SW), p3 = rbind(M, M, M, M),
+            q1 = rbind(I_SW, I_SE, I_NE, I_NW), q2 = rbind(I_SE, I_NE, I_NW, I_SW), q3 = rbind(Mi, Mi, Mi, Mi))
+tri$bb <- cbind(pmin(tri$p1[, 1], tri$p2[, 1], tri$p3[, 1]), pmax(tri$p1[, 1], tri$p2[, 1], tri$p3[, 1]),
+                pmin(tri$p1[, 2], tri$p2[, 2], tri$p3[, 2]), pmax(tri$p1[, 2], tri$p2[, 2], tri$p3[, 2]))
+tri_edges <- list(a = rbind(tri$p1, tri$p2, tri$p3), b = rbind(tri$p2, tri$p3, tri$p1))
+```
+
+### Cutting, mapping and folding
+
+As in the rectilinear part, an edge is straight in index space only within
+one piece of the map, here a triangle, so the polygon is cut wherever it
+crosses a triangle's edge. Each piece is then mapped through its triangle.
+
+The fold is handled the way the seam at 80°E was: by unwrapping. A ring that
+crosses the top edge of cell `i` continues in cell `359 - i`, whose image in
+index space is upside down and mirrored. Carried into a mirrored copy of the
+grid above the top row, `(x, r)` becoming `(360 - x, 600 - r)`, the ring stays
+in one piece; it is burned on that taller lattice and its rows above 300 are
+folded back. The "chart" (mirrored or not, shifted by whole periods or not)
+changes only where the ring jumps between cells that are not neighbours in
+index space.
+
+```{r cap-front-end}
+bary <- function(pt, k) {
+  a <- tri$p1[k, ]; b <- tri$p2[k, ]; c <- tri$p3[k, ]
+  den <- (b[2] - c[2]) * (a[1] - c[1]) + (c[1] - b[1]) * (a[2] - c[2])
+  l1 <- ((b[2] - c[2]) * (pt[1] - c[1]) + (c[1] - b[1]) * (pt[2] - c[2])) / den
+  l2 <- ((c[2] - a[2]) * (pt[1] - c[1]) + (a[1] - c[1]) * (pt[2] - c[2])) / den
+  c(l1, l2, 1 - l1 - l2)
+}
+locate_triangle <- function(pt) {
+  for (k in which(tri$bb[, 1] <= pt[1] & tri$bb[, 2] >= pt[1] & tri$bb[, 3] <= pt[2] & tri$bb[, 4] >= pt[2])) {
+    if (all(bary(pt, k) > -1e-9)) return(k)
+  }
+  stop("the polygon leaves the cap")
+}
+tri_to_index <- function(pt, k) {
+  l <- bary(pt, k)
+  l[1] * tri$q1[k, ] + l[2] * tri$q2[k, ] + l[3] * tri$q3[k, ]
+}
+## cut segment p -> q at every triangle edge it crosses
+cut_at_triangles <- function(p, q) {
+  lo <- pmin(tri_edges$a, tri_edges$b); hi <- pmax(tri_edges$a, tri_edges$b)
+  near <- which(hi[, 1] >= min(p[1], q[1]) & lo[, 1] <= max(p[1], q[1]) &
+                hi[, 2] >= min(p[2], q[2]) & lo[, 2] <= max(p[2], q[2]))
+  a <- tri_edges$a[near, , drop = FALSE]; e <- tri_edges$b[near, , drop = FALSE] - a
+  d <- q - p
+  den <- d[1] * e[, 2] - d[2] * e[, 1]
+  t <- ((a[, 1] - p[1]) * e[, 2] - (a[, 2] - p[2]) * e[, 1]) / den
+  u <- ((a[, 1] - p[1]) * d[2] - (a[, 2] - p[2]) * d[1]) / den
+  t <- sort(unique(round(t[den != 0 & t > 0 & t < 1 & u >= 0 & u <= 1], 13)))
+  rbind(p, cbind(p[1] + t * d[1], p[2] + t * d[2]))
+}
+## the fold maps (x, r) to (360 - x, 600 - r); columns repeat every 360
+chart <- function(xr, flip, shift) {
+  if (flip) xr <- cbind(360 - xr[, 1], 600 - xr[, 2])
+  cbind(xr[, 1] + 360 * shift, xr[, 2])
+}
+## a closed ring in the stereographic plane to one unbroken ring in index space
+cap_ring <- function(ring) {
+  pts <- do.call(rbind, lapply(seq_len(nrow(ring) - 1), function(k) cut_at_triangles(ring[k, ], ring[k + 1, ])))
+  pts <- rbind(pts, pts[1, ])
+  out <- NULL; flip <- FALSE; shift <- 0
+  for (k in seq_len(nrow(pts) - 1)) {
+    t <- locate_triangle((pts[k, ] + pts[k + 1, ]) / 2)
+    native <- rbind(tri_to_index(pts[k, ], t), tri_to_index(pts[k + 1, ], t))
+    seg <- chart(native, flip, shift)
+    if (!is.null(out) && sum((seg[1, ] - out[nrow(out), ])^2) > 1e-12) {
+      ## a jump: take the chart that continues the ring
+      opts <- expand.grid(flip = c(FALSE, TRUE), shift = -2:2)
+      gap <- mapply(function(f, s) sum((chart(native, f, s)[1, ] - out[nrow(out), ])^2), opts$flip, opts$shift)
+      if (min(gap) > 1e-8) stop("could not continue the ring across a seam")
+      flip <- opts$flip[which.min(gap)]; shift <- opts$shift[which.min(gap)]
+      seg <- chart(native, flip, shift)
+    }
+    out <- if (is.null(out)) seg else rbind(out, seg[2, , drop = FALSE])
+  }
+  out
+}
+## burn the ring on the unfolded lattice (rows 0 to 600, whole periods of
+## columns), then fold it back onto the model's 300 x 360 cells
+burn_cap <- function(index_ring) {
+  x0 <- 360 * floor(min(index_ring[, 1]) / 360)
+  W <- 360 * ceiling((max(index_ring[, 1]) - x0) / 360)
+  g <- wk::wkt(sprintf("POLYGON ((%s))", paste(sprintf("%.17g %.17g", index_ring[, 1], 600 - index_ring[, 2]),
+                                               collapse = ", ")))
+  v <- cb_materialize(cb_burn(g, extent = c(x0, x0 + W, 0, 600), dimension = c(W, 600)), background = 0)
+  hit <- which(v > 0)
+  r0 <- (hit - 1) %/% W; c0 <- x0 + (hit - 1) %% W
+  above <- r0 >= 300
+  j <- ifelse(above, 599 - r0, r0)
+  i <- ifelse(above, (359 - c0) %% 360, c0 %% 360)
+  cov <- numeric(300 * 360)
+  s <- rowsum(v[hit], j * 360 + i + 1)
+  cov[as.integer(rownames(s))] <- s[, 1]
+  cov
+}
+```
+
+### An Arctic region
+
+The polygon has eight corners between 78°N and 82°N, encloses the North Pole
+and so crosses the fold twice. Its edges are straight in the stereographic
+plane.
+
+```{r arctic}
+arctic_ll <- rbind(c(0, 80), c(45, 78), c(90, 81), c(140, 79), c(180, 82), c(-135, 78),
+                   c(-90, 81), c(-45, 79), c(0, 80))
+arctic <- stereo(arctic_ll[, 1], arctic_ll[, 2])
+arctic_index <- cap_ring(arctic)
+c(vertices = nrow(arctic), after_cutting = nrow(arctic_index),
+  closes = sum((arctic_index[1, ] - arctic_index[nrow(arctic_index), ])^2) < 1e-12,
+  highest_r = max(arctic_index[, 2]))
+coverage_cap <- burn_cap(arctic_index)
+```
+
+The ring closes on itself, and reaches above row 300: that part is the
+polygon beyond the fold, burned in the mirrored copy and folded back.
+
+Each cell's fraction times the area of its quadrilateral adds up to the
+polygon's area, and it does not when the vertices alone are moved through the
+triangles:
+
+```{r cap-exactness}
+quad_area <- tri_area(SW, SE, NE) + tri_area(NE, NW, SW)
+cap_cell <- cap$j * 360 + cap$i + 1
+covered <- function(cov) sum(cov[cap_cell] * quad_area)
+vertices_only <- function(ring) {
+  out <- NULL
+  for (k in seq_len(nrow(ring))) {
+    native <- rbind(tri_to_index(ring[k, ], locate_triangle(ring[k, ])))
+    opts <- expand.grid(flip = c(FALSE, TRUE), shift = -1:1)
+    cand <- do.call(rbind, mapply(function(f, s) chart(native, f, s), opts$flip, opts$shift, SIMPLIFY = FALSE))
+    out <- rbind(out, if (is.null(out)) cand[1, ] else cand[which.min(colSums((t(cand) - out[nrow(out), ])^2)), ])
+  }
+  out
+}
+coverage_vertices <- burn_cap(vertices_only(arctic))
+c(polygon = shoelace(arctic), cut_at_triangles = covered(coverage_cap),
+  vertices_only = covered(coverage_vertices)) / 1e6
+```
+
+And cell by cell, against each quadrilateral clipped by the polygon with sf:
+
+```{r cap-sf, eval = has_sf}
+old <- suppressMessages(sf::sf_use_s2(FALSE))
+pb <- apply(arctic, 2, range)
+qx <- cbind(SW[, 1], SE[, 1], NE[, 1], NW[, 1]); qy <- cbind(SW[, 2], SE[, 2], NE[, 2], NW[, 2])
+near <- which(apply(qx, 1, max) >= pb[1, 1] & apply(qx, 1, min) <= pb[2, 1] &
+              apply(qy, 1, max) >= pb[1, 2] & apply(qy, 1, min) <= pb[2, 2])
+target <- sf::st_polygon(list(arctic))
+reference <- vapply(near, function(k) {
+  hit <- sf::st_intersection(sf::st_polygon(list(rbind(SW[k, ], SE[k, ], NE[k, ], NW[k, ], SW[k, ]))), target)
+  if (length(hit)) sf::st_area(hit) / quad_area[k] else 0
+}, numeric(1))
+burned <- coverage_cap[cap_cell[near]]
+c(cells = length(near), partly_covered = sum(reference > 1e-6 & reference < 1 - 1e-6),
+  largest_difference = max(abs(burned - reference)))
+invisible(suppressMessages(sf::sf_use_s2(old)))
+```
+
+In native array order the polygon is two halves meeting along the fold, the
+bottom edge of these windows: one around column 270, and its other side,
+mirrored, around column 90.
+
+```{r cap-figure, eval = has_ximage, fig.height = 5.6}
+## the ring, folded back onto the grid for drawing, in two halves
+up <- arctic_index[, 2] > 300
+fx <- ifelse(up, 360 - arctic_index[, 1], arctic_index[, 1])
+fy <- 300 - ifelse(up, 600 - arctic_index[, 2], arctic_index[, 2])
+cov_m <- cb_as_matrix(structure(coverage_cap, gis = list(dim = c(360, 300, 1))))
+cov_m[cov_m == 0] <- NA
+k1 <- 255
+cap_panel <- function(m, cols, title, col, zlim = NULL) {
+  ext <- c(min(cols) - 1, max(cols), 0, 301 - k1)
+  ximage::ximage(m[k1:300, cols], extent = ext, col = col, zlim = zlim,
+                 xlab = "column", ylab = "300 - array row")
+  ximage::xcontour(geolat_t[k1:300, cols], extent = ext, add = TRUE, levels = seq(66, 88, 2),
+                   col = "blue", lwd = 0.5, labcex = 0.5)
+  ximage::xcontour(geolon_t[k1:300, cols], extent = ext, add = TRUE, levels = seq(-280, 80, 20),
+                   col = "grey30", lwd = 0.5, labcex = 0.5)
+  for (side in c(FALSE, TRUE)) lines(ifelse(up == side, fx, NA), fy, lwd = 1.5)
+  title(title, cex.main = 0.85)
+}
+op <- par(mfrow = c(2, 2), mar = c(4, 4, 2, 0.5))
+cap_panel(temp, 225:315, "temperature (C), around column 270", hcl.colors(96, "Spectral", rev = TRUE))
+cap_panel(temp, 45:135, "across the fold, around column 90", hcl.colors(96, "Spectral", rev = TRUE))
+cap_panel(cov_m, 225:315, "coverage", hcl.colors(64, "Viridis"), c(0, 1))
+cap_panel(cov_m, 45:135, "coverage", hcl.colors(64, "Viridis"), c(0, 1))
+par(op)
+```
+
+The mean temperature over the region, as before, now from the folded-back
+coverage of each model cell:
+
+```{r cap-mean}
+coverage_mean <- function(cov) {
+  w <- cov * area_v
+  c(mean_C = sum(w[ocean] * temp_v[ocean]) / sum(w[ocean]),
+    ocean_km2 = sum(w[ocean]) / 1e6, land_km2 = sum(w[!ocean]) / 1e6)
+}
+round(rbind(`cut at triangle edges (exact)` = coverage_mean(coverage_cap),
+            `vertices only` = coverage_mean(coverage_vertices)), 4)
+```
+
+Moving only the vertices misplaces about 13,000 km² of ocean along the
+polygon's edges. Here, too, the mean barely notices.
+
 ## Limits
 
 * The coverage is exact as a fraction of each cell's area in longitude and
   latitude. Weighting it by the cell's area in m² assumes the covered part is
   spread evenly over the cell in m², which on a partly covered cell is out by
   the change of `cos(latitude)` across it, a second-order error for 1° cells.
-* North of 65°N the grid is a curvilinear cap: the row and column are no
-  longer separate functions of latitude and longitude, and `to_index()`
-  refuses polygons that reach it. Burning there needs an inverse lookup
-  through the corner quadrilaterals, with edges cut finely enough to follow
-  the curved cells.
+* In the cap, the coverage is exact for cells taken as straight-edged
+  quadrilaterals in the polar stereographic plane, and polygons with straight
+  edges in that plane. The model's cells are curved on the sphere; between
+  the two the differences are well below a cell, but they are not zero.
+* A polygon must lie wholly in the rectilinear part or wholly in the cap
+  here; joining the two front ends is a matter of cutting at 65°N and adding
+  the coverages.
 * The functions here are a prototype written for this vignette; they are not
   (yet) part of cbr.
 

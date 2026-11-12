@@ -61,6 +61,13 @@ sparse scanline rasterization of polygons, lines, and points.
   periods and folding, figures with `ximage`, and an area-weighted mean of
   temperature over a Southern Ocean sector. A 317 KB extract of the model's
   grid and one temperature field ships in `inst/extdata`. Suggests `ximage`.
+  The vignette also goes into the tripolar cap north of 65°N: cells as
+  quadrilaterals in a polar stereographic plane, each split into four
+  triangles mapped by area onto the unit cell (the exact curvilinear method of
+  the crate's `design/grid-frontends.md`), polygons cut at the triangles'
+  edges, and the grid's fold handled by burning on a mirrored copy and folding
+  back. An Arctic region around the pole burns exactly: its area to 1e-12,
+  and each cell to 4e-8 against sf.
 
 * New article, "Cell predicates: exact all-touched and slivers": the DE-9IM
   relations on Natural Earth countries at one degree. cbr's exact all-touched
