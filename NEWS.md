@@ -1,5 +1,8 @@
 # cbr 0.1.0
 
+Initial development version. R bindings to the `controlledburn` Rust crate for
+sparse scanline rasterization of polygons, lines, and points.
+
 ## Crate
 
 * Built on controlledburn 0.2.0. The crate moved to 0-based indices,
@@ -8,11 +11,10 @@
   and `id`/`geom_index` equal to the 1-based input position. Nothing changes
   for R code, and the `cb_burn` tables are identical to those from 0.1.0.
 
-
-# cbr 0.0.0.9000
-
-Initial development version. R bindings to the `controlledburn` Rust crate for
-sparse scanline rasterization of polygons, lines, and points.
+* `cb_burn_wkb()` writes each output column straight into its R vector and
+  frees the crate's table as soon as its columns exist, and borrows the input
+  WKB rather than copying it. Peak memory for a large burn is about twice the
+  result size instead of three times.
 
 ## Burning
 

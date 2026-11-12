@@ -33,13 +33,11 @@ fn cb_burn_wkb(
     nrow: i32,
     coverage: bool,
 ) -> std::result::Result<List, Error> {
-    // Own the bytes: as_raw_slice() borrows from each list element, which is
-    // dropped as the iterator advances. Empty / non-raw elements become empty
-    // blobs, which burn_wkb skips silently.
-    let blobs: Vec<Vec<u8>> = wkb
-        .values()
-        .map(|obj| obj.as_raw_slice().map(<[u8]>::to_vec).unwrap_or_default())
-        .collect();
+    // Keep the list elements alive and borrow their bytes in place rather
+    // than copying every blob. Empty / non-raw elements become empty blobs,
+    // which burn_wkb skips silently.
+    let objs: Vec<Robj> = wkb.values().collect();
+    let blobs = objs.iter().map(|o| o.as_raw_slice().unwrap_or(&[]));
 
     let grid = GridSpec::new(xmin, ymin, xmax, ymax, ncol as u32, nrow as u32);
     let opts = if coverage {
@@ -48,44 +46,66 @@ fn cb_burn_wkb(
         BurnOptions::approx()
     };
 
-    let res = burn_wkb(blobs.iter().map(Vec::as_slice), &grid, opts)
+    let mut res = burn_wkb(blobs, &grid, opts)
         .map_err(|e| Error::Other(format!("controlledburn burn failed: {e:?}")))?;
+    drop(objs);
 
+    // Each column is written straight into a freshly allocated R vector
+    // (from_values fills in one pass from an exact-size iterator), so the
+    // only copies of a table are the crate's and R's. The crate's is
+    // dropped as soon as its columns exist, which keeps the peak at about
+    // twice the size of the largest table rather than three times.
+    //
     // controlledburn >= 0.2 is 0-based with half-open runs (col_end
     // exclusive). R wants 1-based inclusive: shift row, col, col_start and
     // the ids by one; a 0-based exclusive end is already the 1-based
     // inclusive end, so col_end is passed through.
-    let runs = list!(
-        row = res.runs.iter().map(|r| r.row + 1).collect::<Vec<i32>>(),
-        col_start = res.runs.iter().map(|r| r.col_start + 1).collect::<Vec<i32>>(),
-        col_end = res.runs.iter().map(|r| r.col_end).collect::<Vec<i32>>(),
-        id = res.runs.iter().map(|r| r.id + 1).collect::<Vec<i32>>()
-    );
+    let runs = {
+        let t = std::mem::take(&mut res.runs);
+        list!(
+            row = Integers::from_values(t.iter().map(|r| r.row + 1)),
+            col_start = Integers::from_values(t.iter().map(|r| r.col_start + 1)),
+            col_end = Integers::from_values(t.iter().map(|r| r.col_end)),
+            id = Integers::from_values(t.iter().map(|r| r.id + 1))
+        )
+    };
 
-    let edges = list!(
-        row = res.edges.iter().map(|e| e.row + 1).collect::<Vec<i32>>(),
-        col = res.edges.iter().map(|e| e.col + 1).collect::<Vec<i32>>(),
-        fraction = res.edges.iter().map(|e| e.fraction as f64).collect::<Vec<f64>>(),
-        id = res.edges.iter().map(|e| e.id + 1).collect::<Vec<i32>>()
-    );
+    let edges = {
+        let t = std::mem::take(&mut res.edges);
+        list!(
+            row = Integers::from_values(t.iter().map(|e| e.row + 1)),
+            col = Integers::from_values(t.iter().map(|e| e.col + 1)),
+            fraction = Doubles::from_values(t.iter().map(|e| e.fraction as f64)),
+            id = Integers::from_values(t.iter().map(|e| e.id + 1))
+        )
+    };
 
-    let lines = list!(
-        row = res.lines.iter().map(|l| l.row + 1).collect::<Vec<i32>>(),
-        col = res.lines.iter().map(|l| l.col + 1).collect::<Vec<i32>>(),
-        length = res.lines.iter().map(|l| l.length as f64).collect::<Vec<f64>>(),
-        id = res.lines.iter().map(|l| l.id + 1).collect::<Vec<i32>>()
-    );
+    let lines = {
+        let t = std::mem::take(&mut res.lines);
+        list!(
+            row = Integers::from_values(t.iter().map(|l| l.row + 1)),
+            col = Integers::from_values(t.iter().map(|l| l.col + 1)),
+            length = Doubles::from_values(t.iter().map(|l| l.length as f64)),
+            id = Integers::from_values(t.iter().map(|l| l.id + 1))
+        )
+    };
 
-    let points = list!(
-        row = res.points.iter().map(|p| p.row + 1).collect::<Vec<i32>>(),
-        col = res.points.iter().map(|p| p.col + 1).collect::<Vec<i32>>(),
-        id = res.points.iter().map(|p| p.id + 1).collect::<Vec<i32>>()
-    );
+    let points = {
+        let t = std::mem::take(&mut res.points);
+        list!(
+            row = Integers::from_values(t.iter().map(|p| p.row + 1)),
+            col = Integers::from_values(t.iter().map(|p| p.col + 1)),
+            id = Integers::from_values(t.iter().map(|p| p.id + 1))
+        )
+    };
 
-    let notes = list!(
-        geom_index = res.notes.iter().map(|n| n.geom_index + 1).collect::<Vec<i32>>(),
-        message = res.notes.iter().map(|n| n.message.clone()).collect::<Vec<String>>()
-    );
+    let notes = {
+        let t = std::mem::take(&mut res.notes);
+        list!(
+            geom_index = Integers::from_values(t.iter().map(|n| n.geom_index + 1)),
+            message = Strings::from_values(t.iter().map(|n| n.message.as_str()))
+        )
+    };
 
     Ok(list!(
         runs = runs,
