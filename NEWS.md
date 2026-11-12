@@ -84,6 +84,11 @@ sparse scanline rasterization of polygons, lines, and points.
   `threshold`. Marginal strips along the top and right show the exact column
   and row totals even when the main panel is an overview.
 
+* `plot(what = "exact")` on small grids (no side longer than `detail`, default
+  64 cells) also shows the record structure: a thin white line through the
+  cells of each run, and each edge cell numbered by its position in the
+  `edges` table, so the records can be counted off the picture.
+
 * `cb_crop()` with no `extent` crops to the content extent.
 
 * `cb_burn()` records the number of input geometries in attribute `n_geom`.

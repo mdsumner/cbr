@@ -71,8 +71,21 @@ test_that("plot runs in both modes", {
   expect_invisible(plot(b, main = "exact"))
   expect_invisible(plot(b, what = "overview", marginals = FALSE))
   expect_invisible(plot(b, by_id = TRUE, content = TRUE))
+  out <- plot(b)
   grDevices::dev.off()
   expect_true(file.exists(tf))
-  out <- plot(b)
   expect_s3_class(attr(out, "summary"), "summary.cb_burn")
+})
+
+test_that("exact mode detail overlay respects the size gate", {
+  b <- square_burn()
+  tf <- tempfile(fileext = ".png")
+  grDevices::png(tf)
+  expect_invisible(plot(b, what = "exact"))                 # 10 x 10: detail on
+  expect_invisible(plot(b, what = "exact", detail = 0))     # off
+  attr(b, "dimension") <- c(100L, 100L)
+  expect_invisible(plot(b, what = "exact", marginals = FALSE))        # off by size
+  expect_invisible(plot(b, what = "exact", detail = Inf, marginals = FALSE))
+  grDevices::dev.off()
+  expect_true(file.exists(tf))
 })

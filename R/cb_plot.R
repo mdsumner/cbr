@@ -13,7 +13,10 @@
 #' }
 #'
 #' `"auto"` (default) picks `"exact"` when the total record count is at most
-#' `threshold`, else `"overview"`. Either way the optional marginal strips are
+#' `threshold`, else `"overview"`. On small grids (no side longer than
+#' `detail` cells) the exact rendering also shows the record structure: a thin
+#' white line through the cells of each run, so runs can be seen and counted,
+#' and each edge cell numbered by its position in the `edges` table. Either way the optional marginal strips are
 #' exact: covered cells per grid row (right) and per grid column (top), from
 #' [summary.cb_burn()].
 #'
@@ -26,6 +29,8 @@
 #'   `"overview"` and for edge shading in `"exact"`.
 #' @param by_id In `"exact"` mode, colour runs and edges by geometry `id`
 #'   instead of by coverage.
+#' @param detail Largest grid side (cells) at which `"exact"` mode draws the
+#'   run lines and edge numbers. `0` never, `Inf` always.
 #' @param tiles Passed to [cb_overview()] for the `"overview"` rendering.
 #' @param threshold Record count above which `"auto"` switches to `"overview"`.
 #' @param content Draw the content extent (bounding box of touched cells) as a
@@ -40,7 +45,7 @@ plot.cb_burn <- function(x, what = c("auto", "exact", "overview"),
                          marginals = TRUE,
                          col = grDevices::hcl.colors(64, "YlOrRd", rev = TRUE),
                          by_id = FALSE, tiles = 256L, threshold = 5e4,
-                         content = FALSE, main = NULL, ...) {
+                         content = FALSE, main = NULL, detail = 64L, ...) {
   what <- match.arg(what)
   ext <- attr(x, "extent")
   dm <- attr(x, "dimension")
@@ -68,7 +73,7 @@ plot.cb_burn <- function(x, what = c("auto", "exact", "overview"),
   if (what == "overview") {
     draw_overview(s$overview, col = col)
   } else {
-    draw_exact(x, col = col, by_id = by_id)
+    draw_exact(x, col = col, by_id = by_id, detail = max(dm) <= detail)
   }
   graphics::rect(ext[1L], ext[3L], ext[2L], ext[4L], border = "grey30")
   if (content && !is.null(s$content)) {
@@ -151,7 +156,7 @@ draw_overview <- function(ov, col) {
 }
 
 ## one rect per record
-draw_exact <- function(x, col, by_id) {
+draw_exact <- function(x, col, by_id, detail = FALSE) {
   ext <- attr(x, "extent")
   dm <- attr(x, "dimension")
   resx <- (ext[2L] - ext[1L]) / dm[1L]
@@ -184,6 +189,28 @@ draw_exact <- function(x, col, by_id) {
   if (nrow(p)) {
     graphics::rect(x0(p$col), y1(p$row) - resy, x0(p$col + 1L), y1(p$row),
                    col = if (by_id) idcol(p$id) else col[length(col)], border = NA)
+  }
+
+  if (detail) {
+    ## record structure: one thin white line per run through its cell
+    ## centres (dots at the ends so a one-cell run still shows), and each
+    ## edge cell numbered by its position in the edges table
+    xc <- function(col) ext[1L] + (col - 0.5) * resx
+    yc <- function(row) ext[4L] - (row - 0.5) * resy
+    cex <- max(0.35, min(0.9, 20 / max(dm)))
+    if (nrow(r)) {
+      graphics::segments(xc(r$col_start), yc(r$row), xc(r$col_end), yc(r$row),
+                         col = "white", lwd = 1, lend = 1)
+      graphics::points(c(xc(r$col_start), xc(r$col_end)), rep(yc(r$row), 2L),
+                       pch = 16, col = "white", cex = cex * 0.5)
+    }
+    if (nrow(e)) {
+      key <- paste(e$row, e$col)
+      k <- stats::ave(seq_along(key), key, FUN = seq_along) - 1
+      n <- stats::ave(seq_along(key), key, FUN = length)
+      dy <- (k - (n - 1) / 2) * 0.3 * resy
+      graphics::text(xc(e$col), yc(e$row) - dy, seq_len(nrow(e)), cex = cex, col = "black")
+    }
   }
 }
 

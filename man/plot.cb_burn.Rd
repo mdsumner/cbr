@@ -14,6 +14,7 @@
   threshold = 50000,
   content = FALSE,
   main = NULL,
+  detail = 64L,
   ...
 )
 }
@@ -41,6 +42,9 @@ dashed rectangle.}
 
 \item{main}{Optional title, drawn in the outer margin above the strips.}
 
+\item{detail}{Largest grid side (cells) at which \code{"exact"} mode draws the
+run lines and edge numbers. \code{0} never, \code{Inf} always.}
+
 \item{...}{Passed to \code{\link[graphics:plot]{graphics::plot()}} for the main panel.}
 }
 \value{
@@ -62,7 +66,10 @@ drawn with \code{\link[graphics:image]{graphics::image()}}. Cost does not depend
 }
 
 \code{"auto"} (default) picks \code{"exact"} when the total record count is at most
-\code{threshold}, else \code{"overview"}. Either way the optional marginal strips are
+\code{threshold}, else \code{"overview"}. On small grids (no side longer than
+\code{detail} cells) the exact rendering also shows the record structure: a thin
+white line through the cells of each run, so runs can be seen and counted,
+and each edge cell numbered by its position in the \code{edges} table. Either way the optional marginal strips are
 exact: covered cells per grid row (right) and per grid column (top), from
 \code{\link[=summary.cb_burn]{summary.cb_burn()}}.
 }
