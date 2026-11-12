@@ -4,7 +4,12 @@
 \alias{cb_materialize}
 \title{Materialize a burn as a dense raster}
 \usage{
-cb_materialize(x, value = c("coverage", "id", "count"), background = NA)
+cb_materialize(
+  x,
+  value = c("coverage", "id", "count", "intersects", "interiors_meet", "covers",
+    "touches", "covered_by"),
+  background = NA
+)
 }
 \arguments{
 \item{x}{A \code{cb_burn} object.}
@@ -20,14 +25,21 @@ wanted. Output \code{datatype} is \code{"Float32"}.}
 cell; where geometries overlap the highest \code{id} wins (later inputs
 are burned over earlier ones). Boundary, line, and point cells count
 as covered. Output \code{datatype} is \code{"Int32"}.}
-\item{\code{"count"}}{the number of distinct geometries touching the cell.
-Output \code{datatype} is \code{"Int32"}.}
+\item{\code{"count"}}{the number of distinct geometries with a record in
+the cell. Output \code{datatype} is \code{"Int32"}.}
+\item{\code{"intersects"}, \code{"interiors_meet"}, \code{"covers"}, \code{"touches"},
+\code{"covered_by"}}{the number of polygons satisfying that predicate
+against the cell, as in \code{\link[=cb_cells_where]{cb_cells_where()}}. Needs a \code{relations} table
+(\code{cb_burn(relate = TRUE)} or \code{\link[=cb_relate]{cb_relate()}}). \code{"intersects"} is the
+exact all-touched mask: unlike \code{"count"} it includes cells a polygon
+only touches along a wall or at a corner, and cells holding slivers
+the burn rounds away. Output \code{datatype} is \code{"Int32"}.}
 }}
 
 \item{background}{Value for cells not touched by any geometry. Default \code{NA}.}
 }
 \value{
-A numeric (\code{"coverage"}) or integer (\code{"id"}, \code{"count"}) vector of
+A numeric (\code{"coverage"}) or integer (every other \code{value}) vector of
 length \code{ncol * nrow} with attribute \code{gis}, a list:
 \code{type = "raster"}, \code{bbox = c(xmin, ymin, xmax, ymax)},
 \code{dim = c(ncol, nrow, 1)}, \code{srs} (the burn's \code{crs}, or \code{""}), and

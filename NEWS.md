@@ -68,6 +68,20 @@ sparse scanline rasterization of polygons, lines, and points.
   needs the geometry again, since a burn does not keep it, and refuses cropped
   burns.
 
+* Spatial predicates per cell, from a burn's runs and `relations`:
+  `cb_matrix()` looks up the DE-9IM matrix of any cell (relations where the
+  boundary touches, otherwise covered for run cells and disjoint for the
+  rest; `NA` off the grid and for lines and points). `cb_cells_where()`
+  selects cells by predicate (`"intersects"`, `"interiors_meet"`, `"covers"`,
+  `"touches"`, `"covered_by"`) or by DE-9IM pattern. `cb_materialize()` gains
+  those predicates as values, counting the polygons satisfying each per cell;
+  `value = "intersects"` is the exact all-touched mask, including wall and
+  corner contacts and the slivers the burn rounds away. `cb_slivers()` lists
+  the cells where the burn's records and the exact topology disagree. Tested
+  against GEOS (`sf::st_relate` and its named predicates) on every cell; on
+  Natural Earth countries at one degree it reproduces the crate's figures
+  (12 interior and 6 exterior slivers, 78 touching cells).
+
 ## Burning
 
 * `cb_burn()` rasterizes any geometry that `wk::as_wkb()` understands onto a

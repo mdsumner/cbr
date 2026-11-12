@@ -24,8 +24,15 @@
 #'       cell; where geometries overlap the highest `id` wins (later inputs
 #'       are burned over earlier ones). Boundary, line, and point cells count
 #'       as covered. Output `datatype` is `"Int32"`.}
-#'     \item{`"count"`}{the number of distinct geometries touching the cell.
-#'       Output `datatype` is `"Int32"`.}
+#'     \item{`"count"`}{the number of distinct geometries with a record in
+#'       the cell. Output `datatype` is `"Int32"`.}
+#'     \item{`"intersects"`, `"interiors_meet"`, `"covers"`, `"touches"`,
+#'       `"covered_by"`}{the number of polygons satisfying that predicate
+#'       against the cell, as in [cb_cells_where()]. Needs a `relations` table
+#'       (`cb_burn(relate = TRUE)` or [cb_relate()]). `"intersects"` is the
+#'       exact all-touched mask: unlike `"count"` it includes cells a polygon
+#'       only touches along a wall or at a corner, and cells holding slivers
+#'       the burn rounds away. Output `datatype` is `"Int32"`.}
 #'   }
 #' @param background Value for cells not touched by any geometry. Default `NA`.
 #'
@@ -39,7 +46,7 @@
 #' and `dim` will place the raster approximately but with square, unrotated
 #' cells.
 #'
-#' @return A numeric (`"coverage"`) or integer (`"id"`, `"count"`) vector of
+#' @return A numeric (`"coverage"`) or integer (every other `value`) vector of
 #'   length `ncol * nrow` with attribute `gis`, a list:
 #'   `type = "raster"`, `bbox = c(xmin, ymin, xmax, ymax)`,
 #'   `dim = c(ncol, nrow, 1)`, `srs` (the burn's `crs`, or `""`), and
@@ -54,7 +61,10 @@
 #' cb_as_matrix(v)
 #' }
 #' @export
-cb_materialize <- function(x, value = c("coverage", "id", "count"), background = NA) {
+cb_materialize <- function(x, value = c("coverage", "id", "count", "intersects",
+                                        "interiors_meet", "covers", "touches",
+                                        "covered_by"),
+                           background = NA) {
   if (!inherits(x, "cb_burn")) {
     stop("`x` must be a <cb_burn> object.", call. = FALSE)
   }
@@ -65,6 +75,18 @@ cb_materialize <- function(x, value = c("coverage", "id", "count"), background =
   ncol <- as.integer(dm[1L])
   nrow <- as.integer(dm[2L])
   ncell <- ncol * nrow
+
+  if (value %in% DE9IM_PREDICATES) {
+    ## the number of geometries satisfying the predicate in each cell
+    cells <- cb_cells_where(x, value)
+    out <- rep(as.integer(background), ncell)
+    if (nrow(cells)) {
+      s <- rowsum(rep.int(1L, nrow(cells)), (cells$row - 1L) * ncol + cells$col,
+                  reorder = FALSE)
+      out[as.integer(rownames(s))] <- as.integer(s[, 1L])
+    }
+    return(with_gis(out, x, "Int32"))
+  }
 
   ## expand every table to (cell index, id, weight), cell = (row - 1) * ncol + col
   runs <- x$runs
@@ -111,6 +133,13 @@ cb_materialize <- function(x, value = c("coverage", "id", "count"), background =
     datatype <- "Int32"
   }
 
+  with_gis(out, x, datatype)
+}
+
+## attach the read_ds-style `gis` attribute describing the burn's grid
+with_gis <- function(out, x, datatype) {
+  ext <- attr(x, "extent")
+  dm <- attr(x, "dimension")
   crs <- attr(x, "crs")
   gt <- attr(x, "geotransform")
   bbox <- c(ext[1L], ext[3L], ext[2L], ext[4L])
@@ -121,7 +150,7 @@ cb_materialize <- function(x, value = c("coverage", "id", "count"), background =
   gis <- list(
     type = "raster",
     bbox = bbox,
-    dim = c(ncol, nrow, 1),
+    dim = c(as.integer(dm[1L]), as.integer(dm[2L]), 1),
     srs = if (is.null(crs) || is.na(crs)) "" else crs,
     datatype = datatype
   )
