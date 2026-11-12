@@ -12,7 +12,8 @@ cb_burn(
   crs = NA_character_,
   parity = FALSE,
   threads = 1L,
-  id_offset = 0L
+  id_offset = 0L,
+  relate = FALSE
 )
 }
 \arguments{
@@ -53,11 +54,16 @@ the \code{k}th input geometry. Burn consecutive slices of a collection with
 offsets \code{0}, \code{n1}, \code{n1 + n2}, ... and join them with \code{\link[=cb_combine]{cb_combine()}} to get
 exactly the burn of the whole collection. Recorded in attribute
 \code{id_offset}.}
+
+\item{relate}{Logical. If \code{TRUE}, also compute the DE-9IM relation of each
+polygon to the cells its boundary touches and return it as a sixth table,
+\code{relations}; see \code{\link[=cb_relate]{cb_relate()}}, which does the same for an existing burn.}
 }
 \value{
 An object of class \code{cb_burn}: a named list of five data frames with
 the grid definition stored in attributes (\code{extent}, \code{dimension}, \code{crs},
-\code{coverage}) and the number of input geometries in \code{n_geom}. Indices are 1-based and row 1 is the top row; geometry \code{k}
+\code{coverage}) and the number of input geometries in \code{n_geom}; with
+\code{relate = TRUE} it also has a sixth table, \code{relations}. Indices are 1-based and row 1 is the top row; geometry \code{k}
 (input position) gets \code{id = k}.
 \describe{
 \item{\code{runs}}{\code{row}, \code{col_start}, \code{col_end}, \code{id}: fully covered cells.}

@@ -54,6 +54,20 @@ sparse scanline rasterization of polygons, lines, and points.
   similar to squares, and in cell units, with a warning, otherwise. See the
   "Rotated and sheared grids" vignette for a gallery.
 
+* `cb_relate()` and `cb_burn(relate = TRUE)` (also `cb_burn_index(relate = )`)
+  add a sixth table, `relations`: for each polygon, the DE-9IM intersection
+  matrix (nine characters, e.g. `"212F11FF2"`) against every cell whose closed
+  box its boundary touches, including cells it only touches along a wall or at
+  a corner, which have no record in the burn. Every other cell is `"212FF1FF2"`
+  if it is in the polygon's runs and `"FF2FF1212"` otherwise. The matrices come
+  from the geometry, not the burn's records, so they see the slivers the burn's
+  1e-6 coverage tolerance rounds away. Computed by the crate's `relate_cells`
+  (controlledburn 0.3.1); matrices match `sf::st_relate` cell by cell in the
+  tests, including on rotated and sheared grids. `cb_crop()` crops the table
+  with the others and `cb_combine()` binds it (all burns or none). `cb_relate()`
+  needs the geometry again, since a burn does not keep it, and refuses cropped
+  burns.
+
 ## Burning
 
 * `cb_burn()` rasterizes any geometry that `wk::as_wkb()` understands onto a

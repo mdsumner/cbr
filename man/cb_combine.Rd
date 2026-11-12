@@ -27,7 +27,7 @@ chunks in id order changes nothing.
 \details{
 All inputs must have identical \code{extent}, \code{dimension}, \code{crs},
 \code{coverage} and (for \code{\link[=cb_burn_index]{cb_burn_index()}} burns) \code{geotransform}, and their id ranges \verb{(id_offset, id_offset + n_geom]} must not
-overlap; otherwise an error is raised rather than silently merging
+overlap, and either all or none must have a \code{relations} table; otherwise an error is raised rather than silently merging
 different geometries under one id.
 }
 \examples{

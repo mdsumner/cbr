@@ -12,7 +12,8 @@ cb_burn_index(
   crs = NA_character_,
   parity = FALSE,
   threads = 1L,
-  id_offset = 0L
+  id_offset = 0L,
+  relate = FALSE
 )
 }
 \arguments{
@@ -50,6 +51,10 @@ the \code{k}th input geometry. Burn consecutive slices of a collection with
 offsets \code{0}, \code{n1}, \code{n1 + n2}, ... and join them with \code{\link[=cb_combine]{cb_combine()}} to get
 exactly the burn of the whole collection. Recorded in attribute
 \code{id_offset}.}
+
+\item{relate}{Logical. If \code{TRUE}, also compute the DE-9IM relation of each
+polygon to the cells its boundary touches and return it as a sixth table,
+\code{relations}; see \code{\link[=cb_relate]{cb_relate()}}, which does the same for an existing burn.}
 }
 \value{
 A \code{cb_burn} object; see \code{\link[=cb_burn]{cb_burn()}}.

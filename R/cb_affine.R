@@ -100,7 +100,7 @@ cb_geotransform <- function(origin = c(0, 0), res = 1, rotation = 0, shear = 0) 
 #' @export
 cb_burn_index <- function(geom, geotransform, dimension, coverage = TRUE,
                           crs = NA_character_, parity = FALSE, threads = 1L,
-                          id_offset = 0L) {
+                          id_offset = 0L, relate = FALSE) {
   gt <- check_geotransform(geotransform)
   if (missing(dimension) || length(dimension) != 2L ||
       anyNA(dimension) || any(dimension < 1)) {
@@ -115,7 +115,7 @@ cb_burn_index <- function(geom, geotransform, dimension, coverage = TRUE,
 
   out <- cb_burn(idx, extent = c(0, ncol, 0, nrow), dimension = dimension,
                  coverage = coverage, crs = crs, parity = parity,
-                 threads = threads, id_offset = id_offset)
+                 threads = threads, id_offset = id_offset, relate = relate)
 
   if (nrow(out$lines)) {
     la <- sqrt(ax^2 + ay^2)

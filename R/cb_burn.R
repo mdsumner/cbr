@@ -30,6 +30,9 @@
 #'   offsets `0`, `n1`, `n1 + n2`, ... and join them with [cb_combine()] to get
 #'   exactly the burn of the whole collection. Recorded in attribute
 #'   `id_offset`.
+#' @param relate Logical. If `TRUE`, also compute the DE-9IM relation of each
+#'   polygon to the cells its boundary touches and return it as a sixth table,
+#'   `relations`; see [cb_relate()], which does the same for an existing burn.
 #' @param threads Number of threads, `1` (default) for none, `0` for all
 #'   available. The result is identical to the serial burn. Threads only pay
 #'   for large inputs (the crate uses at most one per 8192 units of work), and
@@ -38,7 +41,8 @@
 #'
 #' @return An object of class `cb_burn`: a named list of five data frames with
 #'   the grid definition stored in attributes (`extent`, `dimension`, `crs`,
-#'   `coverage`) and the number of input geometries in `n_geom`. Indices are 1-based and row 1 is the top row; geometry `k`
+#'   `coverage`) and the number of input geometries in `n_geom`; with
+#'   `relate = TRUE` it also has a sixth table, `relations`. Indices are 1-based and row 1 is the top row; geometry `k`
 #'   (input position) gets `id = k`.
 #'   \describe{
 #'     \item{`runs`}{`row`, `col_start`, `col_end`, `id`: fully covered cells.}
@@ -59,7 +63,7 @@
 #' }
 #' @export
 cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character_,
-                    parity = FALSE, threads = 1L, id_offset = 0L) {
+                    parity = FALSE, threads = 1L, id_offset = 0L, relate = FALSE) {
   geom <- wk::as_wkb(geom)
 
   if (missing(extent) || is.null(extent)) {
@@ -111,14 +115,11 @@ cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character
     coverage = isTRUE(coverage),
     parity = isTRUE(parity),
     threads = threads,
-    id_offset = id_offset
+    id_offset = id_offset,
+    relate = isTRUE(relate)
   )
 
-  tables <- lapply(res, function(tbl) {
-    class(tbl) <- "data.frame"
-    attr(tbl, "row.names") <- .set_row_names(length(tbl[[1L]]))
-    tbl
-  })
+  tables <- lapply(res[!vapply(res, is.null, logical(1))], as_burn_table)
 
   structure(
     tables,
@@ -130,6 +131,13 @@ cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character
     id_offset = id_offset,
     class = "cb_burn"
   )
+}
+
+## a list of equal-length columns as a plain data frame
+as_burn_table <- function(tbl) {
+  class(tbl) <- "data.frame"
+  attr(tbl, "row.names") <- .set_row_names(length(tbl[[1L]]))
+  tbl
 }
 
 ## ids in a burn are `id_offset + position`; objects built without the

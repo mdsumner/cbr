@@ -15,7 +15,8 @@ cb_burn_wkb(
   coverage,
   parity,
   threads,
-  id_offset
+  id_offset,
+  relate
 )
 }
 \arguments{
@@ -39,10 +40,14 @@ one thread per 8192 units of work, so small burns stay serial.}
 \item{id_offset}{Integer, non-negative; added to each geometry's position,
 so the \code{id} (and \code{geom_index}) columns are \code{id_offset} plus the 1-based
 input position.}
+
+\item{relate}{Logical; if \code{TRUE} also compute the DE-9IM relations of each
+polygon against the cells its boundary touches (see \code{\link[=cb_relate]{cb_relate()}}).}
 }
 \value{
 A list of five lists (\code{runs}, \code{edges}, \code{lines}, \code{points}, \code{notes}),
-each a set of equal-length columns.
+each a set of equal-length columns, and \code{relations} (the relations table
+if \code{relate}, otherwise \code{NULL}).
 }
 \description{
 Low-level worker behind \code{\link[=cb_burn]{cb_burn()}}. \code{wkb} is a list of raw vectors (one WKB

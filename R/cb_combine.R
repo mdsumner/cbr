@@ -17,7 +17,7 @@
 #'
 #' @details All inputs must have identical `extent`, `dimension`, `crs`,
 #'   `coverage` and (for [cb_burn_index()] burns) `geotransform`, and their id ranges `(id_offset, id_offset + n_geom]` must not
-#'   overlap; otherwise an error is raised rather than silently merging
+#'   overlap, and either all or none must have a `relations` table; otherwise an error is raised rather than silently merging
 #'   different geometries under one id.
 #'
 #' @examples
@@ -50,6 +50,12 @@ cb_combine <- function(...) {
     if (!all(same)) {
       stop(sprintf("burns differ in `%s`; they must share one grid.", a), call. = FALSE)
     }
+  }
+
+  has_rel <- vapply(xs, function(x) !is.null(x$relations), logical(1))
+  if (any(has_rel) && !all(has_rel)) {
+    stop("some burns have a `relations` table and some do not; relate them all ",
+         "(or none) before combining.", call. = FALSE)
   }
 
   lo <- vapply(xs, burn_id_offset, integer(1))

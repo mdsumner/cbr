@@ -1,10 +1,37 @@
 use controlledburn::{
-    burn_par, burn_wkb, parse_wkb, BurnError, BurnMode, BurnOptions, BurnResult, Geometry, GridSpec,
+    burn_par, burn_wkb, parse_wkb, relate_cells, BurnError, BurnMode, BurnOptions, BurnResult,
+    CellRelation, Geometry, GridRun, GridSpec,
 };
 use extendr_api::prelude::*;
 
 fn blob(o: &Robj) -> &[u8] {
     o.as_raw_slice().unwrap_or(&[])
+}
+
+/// Parse every blob; an empty or unparseable blob becomes an empty geometry,
+/// which has no relations (the burn already noted the failure).
+fn parse_all(objs: &[Robj]) -> Vec<Geometry> {
+    objs.iter()
+        .map(|o| {
+            let b = blob(o);
+            if b.is_empty() {
+                Geometry::MultiPoint(Vec::new())
+            } else {
+                parse_wkb(b).unwrap_or_else(|_| Geometry::MultiPoint(Vec::new()))
+            }
+        })
+        .collect()
+}
+
+/// The relations table in R's conventions: 1-based `row`, `col` and `id`
+/// (the crate's id is `id_offset + k`), and the 9-character DE-9IM string.
+fn relations_list(rel: &[CellRelation]) -> List {
+    list!(
+        row = Integers::from_values(rel.iter().map(|c| c.row + 1)),
+        col = Integers::from_values(rel.iter().map(|c| c.col + 1)),
+        id = Integers::from_values(rel.iter().map(|c| c.id + 1)),
+        matrix = Strings::from_values(rel.iter().map(|c| c.matrix.as_str()))
+    )
 }
 
 /// Parse every blob, then burn on `threads` threads (0: all available).
@@ -58,8 +85,11 @@ fn burn_wkb_threaded(
 /// @param id_offset Integer, non-negative; added to each geometry's position,
 ///   so the `id` (and `geom_index`) columns are `id_offset` plus the 1-based
 ///   input position.
+/// @param relate Logical; if `TRUE` also compute the DE-9IM relations of each
+///   polygon against the cells its boundary touches (see [cb_relate()]).
 /// @return A list of five lists (`runs`, `edges`, `lines`, `points`, `notes`),
-///   each a set of equal-length columns.
+///   each a set of equal-length columns, and `relations` (the relations table
+///   if `relate`, otherwise `NULL`).
 /// @export
 #[extendr]
 fn cb_burn_wkb(
@@ -74,6 +104,7 @@ fn cb_burn_wkb(
     parity: bool,
     threads: i32,
     id_offset: i32,
+    relate: bool,
 ) -> std::result::Result<List, Error> {
     // Keep the list elements alive and borrow their bytes in place rather
     // than copying every blob. Empty / non-raw elements become empty blobs,
@@ -97,6 +128,18 @@ fn cb_burn_wkb(
     };
     let mut res =
         burned.map_err(|e| Error::Other(format!("controlledburn burn failed: {e}")))?;
+
+    // DE-9IM of each polygon against the cells its boundary touches. It reads
+    // the runs of the burn and the geometry, so it must come before the
+    // tables are taken apart below.
+    let relations: Robj = if relate {
+        let geoms = parse_all(&objs);
+        let rel = relate_cells(&res, &geoms, &grid, opts)
+            .map_err(|e| Error::Other(format!("controlledburn relate failed: {e}")))?;
+        relations_list(&rel).into()
+    } else {
+        ().into()
+    };
     drop(objs);
 
     // Each column is written straight into a freshly allocated R vector
@@ -161,8 +204,66 @@ fn cb_burn_wkb(
         edges = edges,
         lines = lines,
         points = points,
-        notes = notes
+        notes = notes,
+        relations = relations
     ))
+}
+
+/// DE-9IM of polygons against grid cells, for an existing burn.
+///
+/// Low-level worker behind [cb_relate()]. `runs` is the burn's runs table
+/// (R's conventions: 1-based, inclusive `col_end`); `wkb` must be the
+/// geometries that were burned, in the same grid coordinates, and `coverage`
+/// and `id_offset` the burn's. Returns the relations table: `row`, `col`,
+/// `id`, `matrix`.
+/// @param wkb List of raw vectors, one WKB blob per geometry.
+/// @param runs Data frame with integer columns `row`, `col_start`, `col_end`,
+///   `id`.
+/// @param xmin,ymin,xmax,ymax Grid extent.
+/// @param ncol,nrow Grid dimensions.
+/// @param coverage Logical; the burn's mode.
+/// @param id_offset Integer; the burn's `id_offset`.
+/// @return A list of equal-length columns `row`, `col`, `id`, `matrix`.
+/// @export
+#[extendr]
+fn cb_relate_wkb(
+    wkb: List,
+    runs: List,
+    xmin: f64,
+    ymin: f64,
+    xmax: f64,
+    ymax: f64,
+    ncol: i32,
+    nrow: i32,
+    coverage: bool,
+    id_offset: i32,
+) -> std::result::Result<List, Error> {
+    let col = |name: &str| -> std::result::Result<Robj, Error> { runs.dollar(name) };
+    let (r_row, r_cs, r_ce, r_id) = (col("row")?, col("col_start")?, col("col_end")?, col("id")?);
+    let get = |o: &Robj| -> Vec<i32> {
+        o.as_integer_slice().map(|s| s.to_vec()).unwrap_or_default()
+    };
+    let (row, cs, ce, id) = (get(&r_row), get(&r_cs), get(&r_ce), get(&r_id));
+    if [cs.len(), ce.len(), id.len()].iter().any(|&n| n != row.len()) {
+        return Err(Error::Other("`runs` columns differ in length".into()));
+    }
+
+    // R's 1-based inclusive runs back to the crate's 0-based half-open ones;
+    // only runs are read by relate_cells.
+    let mut res = BurnResult::default();
+    res.runs = (0..row.len())
+        .map(|i| GridRun { row: row[i] - 1, col_start: cs[i] - 1, col_end: ce[i], id: id[i] - 1 })
+        .collect();
+
+    let objs: Vec<Robj> = wkb.values().collect();
+    let geoms = parse_all(&objs);
+    let grid = GridSpec::new(xmin, ymin, xmax, ymax, ncol as u32, nrow as u32);
+    let mode = if coverage { BurnMode::Coverage } else { BurnMode::Approx };
+    let opts = BurnOptions::default().with_mode(mode).with_id_offset(id_offset);
+
+    let rel = relate_cells(&res, &geoms, &grid, opts)
+        .map_err(|e| Error::Other(format!("controlledburn relate failed: {e}")))?;
+    Ok(relations_list(&rel))
 }
 
 // Macro to generate exports.
@@ -171,4 +272,5 @@ fn cb_burn_wkb(
 extendr_module! {
     mod cbr;
     fn cb_burn_wkb;
+    fn cb_relate_wkb;
 }

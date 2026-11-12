@@ -117,6 +117,9 @@ cb_crop <- function(x, extent, snap = c("out", "in", "near")) {
     points = reset_rownames(cellwise(x$points)),
     notes = x$notes
   )
+  if (!is.null(x$relations)) {
+    out$relations <- reset_rownames(cellwise(x$relations))
+  }
 
   structure(
     out,
