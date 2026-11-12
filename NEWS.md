@@ -54,6 +54,14 @@ sparse scanline rasterization of polygons, lines, and points.
   similar to squares, and in cell units, with a warning, otherwise. See the
   "Rotated and sheared grids" vignette for a gallery.
 
+* New vignette, "Burning onto a model's native ocean grid": a polygon burned
+  exactly onto the rectilinear part of the ACCESS-ESM1.6 ocean (MOM tripolar)
+  grid in its native array order, with edges cut at the cell walls taken from
+  the model's corner coordinates, the 80°E seam handled by burning on two
+  periods and folding, figures with `ximage`, and an area-weighted mean of
+  temperature over a Southern Ocean sector. A 317 KB extract of the model's
+  grid and one temperature field ships in `inst/extdata`. Suggests `ximage`.
+
 * `cb_relate()` and `cb_burn(relate = TRUE)` (also `cb_burn_index(relate = )`)
   add a sixth table, `relations`: for each polygon, the DE-9IM intersection
   matrix (nine characters, e.g. `"212F11FF2"`) against every cell whose closed

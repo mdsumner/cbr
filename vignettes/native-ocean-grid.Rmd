@@ -1,0 +1,379 @@
+---
+title: "Burning onto a model's native ocean grid"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Burning onto a model's native ocean grid}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 7, fig.height = 4.6, dpi = 90)
+has_ximage <- requireNamespace("ximage", quietly = TRUE)
+has_sf <- requireNamespace("sf", quietly = TRUE)
+```
+
+Ocean models run on their own grids. The ocean of ACCESS-ESM1.6 (the MOM
+model) uses a *tripolar* grid of 300 rows and 360 columns. South of 65°N it is
+a regular 1° longitude by an uneven latitude grid; north of 65°N it bends into
+a cap whose two northern poles sit on land, so that no grid pole lies in the
+Arctic Ocean.
+
+Statistics over a region of such output usually start by regridding to
+longitude and latitude, which smooths the values and changes the cells. This
+vignette instead burns a polygon straight onto the model's own cells: the
+polygon is moved into the grid's *index space* (fractional column and row),
+burned on a lattice of unit cells, and the coverage of every model cell comes
+back exact. It covers the rectilinear part of the grid, south of 65°N, which
+is all of the Southern Ocean.
+
+## Native array order
+
+A two-dimensional array read through GDAL arrives as a vector in the order
+the array is stored, first row first. `matrix(v, nrow, byrow = TRUE)` turns it
+into a matrix whose row 1 is the array's first row, exactly as
+`graphics::rasterImage()` and `ximage::ximage()` draw it: row 1 at the top,
+and axes running over `c(0, ncol)` and `c(0, nrow)`, which is index space.
+
+cbr uses the same order. Row 1 of a burn is its top row, `cb_materialize()`
+returns cells row by row from row 1, and `cb_as_matrix()` fills `byrow`. So if
+the burn puts the array's row 0 at its top, every result lines up with the
+model's arrays cell for cell, with no flips or transposes anywhere.
+
+For this grid the array's first row is the southernmost (latitude increases
+with the row index), so all the pictures here are south-up. That is not a
+mistake to be corrected: it is the array.
+
+## The data
+
+The model output is available through a virtual multidimensional dataset, and
+the static grid (cell corners and areas) as netCDF files. This is how the
+arrays used here were read; the code is not run when the vignette is built.
+
+```{r fetch, eval = FALSE}
+library(gdalraster)
+src <- paste0("/vsicurl/https://data.source.coop/ausantarctic/ausantarctic-scratch/",
+              "access-esm/access-esm1-6.historical.ocean-3d-temp-1mon-mean/mdim.vrt")
+fx <- function(v) {
+  sprintf("/vsicurl/https://projects.pawsey.org.au/ct-esm1-6/output000/ocean/ocean-2d-%s-fx.nc", v)
+}
+
+## a 2D array, or a 2D view of one, in native order: row 1 is array row 0
+read_mdim <- function(dsn, name, view = "") {
+  ds <- mdim_as_classic(dsn, name, idx_xdim = 1, idx_ydim = 0, view_expr = view)
+  on.exit(ds$close())
+  dm <- ds$dim()
+  matrix(ds$read(1, 0, 0, dm[1], dm[2], dm[1], dm[2]), nrow = dm[2], byrow = TRUE)
+}
+
+temp <- read_mdim(src, "temp", "[0,0,:,:]")   # Jan 1850, top level (5 m), K
+geolon_t <- read_mdim(src, "geolon_t")         # cell centres
+geolat_t <- read_mdim(src, "geolat_t")
+geolon_c <- read_mdim(fx("geolon_c"), "geolon_c")   # cell corners
+geolat_c <- read_mdim(fx("geolat_c"), "geolat_c")
+area_t <- read_mdim(fx("area_t"), "area_t")         # cell areas, m^2
+```
+
+The netCDF files are read through the multidimensional API too, not the
+classic raster driver, because the classic driver may present an array whose
+latitude increases with the row as north-up, reversing its rows. Here we want
+the array as it is stored.
+
+cbr ships these arrays, exactly as read:
+
+```{r data}
+library(cbr)
+x <- readRDS(system.file("extdata", "access-esm1-6-ocean-grid.rds", package = "cbr"))
+temp <- x$temp - 273.15               # conservative temperature, C
+geolon_t <- x$geolon_t; geolat_t <- x$geolat_t
+geolon_c <- x$geolon_c; geolat_c <- x$geolat_c
+area_t <- x$area_t
+dim(temp)
+c(land_cells = sum(is.na(temp)), first_row_lat = geolat_t[1, 1], last_row_lat = max(geolat_t[300, ]))
+```
+
+## The grid in index space
+
+`ximage()` draws the temperature as stored, and `xcontour()` adds contours of
+the longitude and latitude of each cell centre. The axes are column and row:
+index space, where the burn happens.
+
+```{r index-space, eval = has_ximage, fig.height = 5}
+ximage::ximage(temp, col = hcl.colors(96, "Spectral", rev = TRUE),
+               xlab = "column", ylab = "300 - array row")
+ximage::xcontour(geolon_t, add = TRUE, levels = seq(-280, 80, 20), col = "grey25", lwd = 0.6)
+ximage::xcontour(geolat_t, add = TRUE, levels = seq(-80, 80, 10), col = "blue", lwd = 0.6)
+title("Temperature at 5 m, Jan 1850, in native array order (south at the top)", cex.main = 0.9)
+```
+
+Three things in that picture shape the method.
+
+* Longitude contours (grey) are vertical and evenly spaced: in the
+  rectilinear part the column is an affine function of longitude, with
+  longitude running from -280 to 80, a period of 360.
+* Latitude contours (blue) are horizontal but unevenly spaced: rows are
+  closest together near the equator. The row is a monotone but only
+  *piecewise* linear function of latitude, with a change of slope at every
+  row wall.
+* Near the bottom of the picture, north of 65°N, the contours curve around
+  the cap's two poles: index space is no longer a product of a longitude axis
+  and a latitude axis there.
+
+## Cell walls
+
+The corners `geolon_c` and `geolat_c` are at the north-east corner of the
+cell with the same index (MOM's B-grid). In the rectilinear rows the corner
+latitude is constant along each row, so the walls are two vectors: 361
+longitudes and one latitude per row boundary. The south wall of the first row
+is not in the file (it would be a corner of a row that does not exist); it is
+taken as the mirror of its north wall about the cell centre. That row lies
+under the Antarctic ice and is land.
+
+```{r walls}
+## the first row whose corner latitudes vary along it: the tripolar cap
+nrect <- which(apply(geolat_c, 1, function(r) diff(range(r))) > 1e-4)[1] - 1L
+lat_wall <- c(2 * geolat_t[1, 1] - geolat_c[1, 1], geolat_c[seq_len(nrect), 1])
+lon_wall <- c(geolon_c[1, 360] - 360, geolon_c[1, ])
+c(rectilinear_rows = nrect, north_limit = lat_wall[nrect + 1],
+  lon_from = lon_wall[1], lon_to = lon_wall[361], lon_step_error = max(abs(diff(lon_wall) - 1)))
+range(diff(lat_wall))
+```
+
+The model's own cell areas are a check on the walls: each should be the
+spherical area between its walls.
+
+```{r area-check}
+R <- 6371000
+sphere <- outer(R^2 * diff(sin(lat_wall * pi / 180)), diff(lon_wall) * pi / 180)
+summary(as.vector(area_t[seq_len(nrect), ] / sphere - 1))
+```
+
+They agree to a few parts in ten thousand, the precision of the stored
+single-precision areas.
+
+## From longitude and latitude to index space
+
+Within one cell, the column depends only on longitude and the row only on
+latitude, each linearly, so the map from longitude and latitude to index space
+is affine inside every cell. A straight edge stays straight while it crosses
+a cell, but it bends where it crosses a wall into rows of a different height.
+Moving only a polygon's vertices would draw each edge as one straight line in
+index space instead, off the true edge wherever the row spacing changes along
+it. Inserting a vertex wherever an edge crosses a wall makes every piece lie
+within one cell, where the map is exact.
+
+Two more details. The burn's top row must be the array's row 0, so a
+fractional array row `r` (0 at the south wall of the first row) becomes
+`y = 300 - r`. And longitude is periodic: a polygon that crosses the grid's
+seam at 80°E (where -280 meets 80) is burned on a lattice two periods wide,
+so that it stays in one piece, and its columns are folded back onto the 360
+model columns afterwards.
+
+```{r front-end}
+## cut every edge at each wall it crosses; the crossing coordinate is put on
+## the wall exactly, and its index is the wall's
+cut_at_walls <- function(ring, xw, yw) {
+  pieces <- lapply(seq_len(nrow(ring) - 1L), function(k) {
+    p <- ring[k, ]; q <- ring[k + 1L, ]
+    cx <- if (q[1] != p[1]) which(xw > min(p[1], q[1]) & xw < max(p[1], q[1])) else integer()
+    cy <- if (q[2] != p[2]) which(yw > min(p[2], q[2]) & yw < max(p[2], q[2])) else integer()
+    t <- c(0, (xw[cx] - p[1]) / (q[1] - p[1]), (yw[cy] - p[2]) / (q[2] - p[2]))
+    ix <- c(NA, cx - 1, rep(NA, length(cy)))
+    iy <- c(NA, rep(NA, length(cx)), cy - 1)
+    o <- order(t)
+    data.frame(lon = p[1] + t[o] * (q[1] - p[1]), lat = p[2] + t[o] * (q[2] - p[2]),
+               ix = ix[o], iy = iy[o])
+  })
+  out <- do.call(rbind, pieces)
+  rbind(out, out[1, ])
+}
+
+## longitude and latitude to burn coordinates: x is the (fractional) column,
+## y = nrow - r puts array row 0 at the top
+to_index <- function(pts, xw, yw, nrow) {
+  x <- stats::approx(xw, seq_along(xw) - 1, pts$lon)$y
+  r <- stats::approx(yw, seq_along(yw) - 1, pts$lat)$y
+  x[!is.na(pts$ix)] <- pts$ix[!is.na(pts$ix)]
+  r[!is.na(pts$iy)] <- pts$iy[!is.na(pts$iy)]
+  if (anyNA(x) || anyNA(r)) stop("the polygon leaves the rectilinear part of the grid")
+  cbind(x = x, y = nrow - r)
+}
+
+## fold the columns of a burn on a lattice two periods wide back onto one
+fold_columns <- function(b, ncol) {
+  r <- b$runs
+  across <- r$col_start <= ncol & r$col_end > ncol
+  right <- r[across, ]
+  right$col_start <- ncol + 1L
+  r$col_end[across] <- ncol
+  r <- rbind(r, right)
+  wrap <- r$col_start > ncol
+  r$col_start[wrap] <- r$col_start[wrap] - ncol
+  r$col_end[wrap] <- r$col_end[wrap] - ncol
+  e <- b$edges
+  e$col[e$col > ncol] <- e$col[e$col > ncol] - ncol
+  b$runs <- r[order(r$id, r$row, r$col_start), ]
+  b$edges <- e
+  for (nm in c("runs", "edges")) attr(b[[nm]], "row.names") <- .set_row_names(nrow(b[[nm]]))
+  attr(b, "dimension") <- c(ncol, attr(b, "dimension")[2])
+  attr(b, "extent") <- c(0, ncol, 0, attr(b, "dimension")[2])
+  b
+}
+
+## burn a polygon given as a closed ring of longitude and latitude (straight
+## edges in longitude and latitude, less than 360 degrees wide)
+burn_lonlat <- function(ring, lon_wall, lat_wall, nrow, cut = TRUE, coverage = TRUE) {
+  ncol <- length(lon_wall) - 1L
+  ring[, 1] <- ring[, 1] - 360 * floor((min(ring[, 1]) - lon_wall[1]) / 360)
+  xw <- c(lon_wall, lon_wall[-1] + 360)
+  pts <- if (cut) {
+    cut_at_walls(ring, xw, lat_wall)
+  } else {
+    data.frame(lon = ring[, 1], lat = ring[, 2], ix = NA, iy = NA)
+  }
+  idx <- to_index(pts, xw, lat_wall, nrow)
+  g <- wk::wkt(sprintf("POLYGON ((%s))", paste(sprintf("%.17g %.17g", idx[, 1], idx[, 2]), collapse = ", ")))
+  b <- cb_burn(g, extent = c(0, 2 * ncol, 0, nrow), dimension = c(2 * ncol, nrow), coverage = coverage)
+  out <- fold_columns(b, ncol)
+  attr(out, "index_ring") <- idx
+  out
+}
+```
+
+## A Southern Ocean sector
+
+The polygon runs from 40°E to 130°E across the Indian sector of the Southern
+Ocean, with slanted edges, and crosses the seam at 80°E. Its edges are
+straight lines in longitude and latitude.
+
+```{r burn}
+ring <- rbind(c(40, -66), c(95, -63), c(130, -58), c(125, -45), c(70, -42), c(45, -50), c(40, -66))
+b <- burn_lonlat(ring, lon_wall, lat_wall, nrow = 300)
+b
+c(vertices = nrow(ring), after_cutting = nrow(attr(b, "index_ring")))
+```
+
+The burn is exact in longitude and latitude. Each cell's fraction times the
+cell's area in degrees adds up to the polygon's area, and it does not when
+only the vertices are moved:
+
+```{r exactness}
+shoelace <- function(m) abs(sum(m[-nrow(m), 1] * m[-1, 2] - m[-1, 1] * m[-nrow(m), 2])) / 2
+cell_deg2 <- rep(c(diff(lat_wall), rep(0, 300 - nrect)), each = 360) * rep(diff(lon_wall), 300)
+covered_deg2 <- function(b) sum(cb_materialize(b, background = 0) * cell_deg2)
+b_vertices <- burn_lonlat(ring, lon_wall, lat_wall, nrow = 300, cut = FALSE)
+c(polygon = shoelace(ring), cut_at_walls = covered_deg2(b), vertices_only = covered_deg2(b_vertices))
+```
+
+Cell by cell, the fractions match each cell's rectangle clipped by the
+polygon in planar longitude and latitude, here with sf on every cell of the
+polygon's bounding box:
+
+```{r sf-check, eval = has_sf}
+old <- suppressMessages(sf::sf_use_s2(FALSE))
+xw <- c(lon_wall, lon_wall[-1] + 360)
+cols2 <- seq(floor(stats::approx(xw, 0:720, min(ring[, 1]))$y) + 1,
+             ceiling(stats::approx(xw, 0:720, max(ring[, 1]))$y))
+rows <- seq(floor(stats::approx(lat_wall, 0:nrect, min(ring[, 2]))$y) + 1,
+            ceiling(stats::approx(lat_wall, 0:nrect, max(ring[, 2]))$y))
+target <- sf::st_polygon(list(ring))
+boxes <- expand.grid(col2 = cols2, row = rows)
+reference <- mapply(function(c2, r) {
+  box <- sf::st_polygon(list(rbind(c(xw[c2], lat_wall[r]), c(xw[c2 + 1], lat_wall[r]),
+                                   c(xw[c2 + 1], lat_wall[r + 1]), c(xw[c2], lat_wall[r + 1]),
+                                   c(xw[c2], lat_wall[r]))))
+  hit <- sf::st_intersection(box, target)
+  if (length(hit)) sf::st_area(hit) / sf::st_area(box) else 0
+}, boxes$col2, boxes$row)
+coverage <- cb_materialize(b, background = 0)
+burned <- coverage[(boxes$row - 1) * 360 + ((boxes$col2 - 1) %% 360) + 1]
+c(cells = nrow(boxes), partly_covered = sum(reference > 0 & reference < 1),
+  largest_difference = max(abs(burned - reference)))
+invisible(suppressMessages(sf::sf_use_s2(old)))
+```
+
+The differences are at the single precision in which the burn stores edge
+fractions.
+
+## The burn on the model grid
+
+The coverage is a vector in the model's own order, so `cb_as_matrix()` gives a
+matrix that `ximage()` draws on the same axes as the temperature. The window
+below runs over 60 columns either side of the seam, columns 301 to 360 and
+then 1 to 60, which is the stretch of the two-period lattice the polygon was
+burned on, so its outline in index space needs no folding. Only the
+southernmost 70 rows are shown.
+
+```{r window, eval = has_ximage, fig.height = 4.4}
+coverage <- cb_materialize(b, background = 0)
+cov_m <- cb_as_matrix(coverage)
+cov_m[cov_m == 0] <- NA
+k <- 70
+cols <- c(301:360, 1:60)
+ext <- c(300, 420, 300 - k, 300)
+lon_win <- geolon_t[seq_len(k), cols]
+lon_win[, 61:120] <- lon_win[, 61:120] + 360     # unwrap across 80E for the contours
+idx <- attr(b, "index_ring")
+panel <- function(m, title, col, zlim = NULL) {
+  ximage::ximage(m[seq_len(k), cols], extent = ext, col = col, zlim = zlim,
+                 xlab = "column (360: the seam at 80E)", ylab = "300 - array row")
+  ximage::xcontour(lon_win, extent = ext, add = TRUE, levels = seq(20, 160, 10),
+                   col = "grey30", lwd = 0.5, labcex = 0.55)
+  ximage::xcontour(geolat_t[seq_len(k), cols], extent = ext, add = TRUE,
+                   levels = seq(-75, -30, 5), col = "blue", lwd = 0.5, labcex = 0.55)
+  abline(v = 360, lty = 2)
+  lines(idx[, "x"], idx[, "y"], lwd = 1.5)
+  title(title, cex.main = 0.85)
+}
+op <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 0.5))
+panel(temp, "temperature at 5 m (C)", hcl.colors(96, "Spectral", rev = TRUE))
+panel(cov_m, "coverage of each model cell", hcl.colors(64, "Viridis"), zlim = c(0, 1))
+par(op)
+```
+
+The white cell inside the polygon in the left panel is land: Kerguelen, the
+only island the model's 1° cells resolve in this sector.
+
+## Mean temperature over the sector
+
+With the coverage, the model's cell areas and the temperature all in the same
+order, an area-weighted mean is plain vector arithmetic. Land cells have no
+temperature and drop out.
+
+```{r mean}
+temp_v <- as.vector(t(temp))      # row by row from array row 0: the burn's order
+area_v <- as.vector(t(area_t))
+ocean <- !is.na(temp_v)
+sector_mean <- function(b) {
+  w <- cb_materialize(b, background = 0) * area_v
+  c(mean_C = sum(w[ocean] * temp_v[ocean]) / sum(w[ocean]),
+    ocean_km2 = sum(w[ocean]) / 1e6, land_km2 = sum(w[!ocean]) / 1e6)
+}
+b_centres <- burn_lonlat(ring, lon_wall, lat_wall, nrow = 300, coverage = FALSE)
+round(rbind(`cut at walls (exact)` = sector_mean(b),
+            `vertices only` = sector_mean(b_vertices),
+            `cell centres` = sector_mean(b_centres)), 4)
+```
+
+For a field as smooth as temperature the three means differ by less than a
+hundredth of a degree. The areas differ more: moving only the vertices loses
+about 21,000 km² along the slanted edges, and the cell-centre rule (whole
+cells whose centre is inside) gains some. For a field with sharp gradients at
+the polygon's edge, or for totals rather than means, those cells matter.
+
+## Limits
+
+* The coverage is exact as a fraction of each cell's area in longitude and
+  latitude. Weighting it by the cell's area in m² assumes the covered part is
+  spread evenly over the cell in m², which on a partly covered cell is out by
+  the change of `cos(latitude)` across it, a second-order error for 1° cells.
+* North of 65°N the grid is a curvilinear cap: the row and column are no
+  longer separate functions of latitude and longitude, and `to_index()`
+  refuses polygons that reach it. Burning there needs an inverse lookup
+  through the corner quadrilaterals, with edges cut finely enough to follow
+  the curved cells.
+* The functions here are a prototype written for this vignette; they are not
+  (yet) part of cbr.
+
+Data: ACCESS-ESM1.6 historical simulation, ocean component, read from the
+virtual dataset and static grid files given above.
