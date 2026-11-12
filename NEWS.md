@@ -62,6 +62,16 @@ sparse scanline rasterization of polygons, lines, and points.
   temperature over a Southern Ocean sector. A 317 KB extract of the model's
   grid and one temperature field ships in `inst/extdata`. Suggests `ximage`.
 
+* New article, "Cell predicates: exact all-touched and slivers": the DE-9IM
+  relations on Natural Earth countries at one degree. cbr's exact all-touched
+  (`cb_materialize(value = "intersects")`) against GDAL's all-touched via
+  `terra::rasterize(touches = TRUE)`: 82 cells cbr finds that GDAL misses
+  (borders on cell walls) and 4 GDAL burns that do not touch the country, all
+  settled by GEOS. And the slivers the burn's tolerance rounds away, with a
+  check for invalid input: one of the crate book's 18 slivers comes from
+  Sudan's self-intersecting polygon in Natural Earth. The countries ship in
+  `inst/extdata` (public domain). Suggests `terra`.
+
 * The pkgdown site is built and deployed by GitHub Actions
   (`.github/workflows/pkgdown.yaml`), with a hex logo drawn by cbr itself
   (`data-raw/logo.R`).

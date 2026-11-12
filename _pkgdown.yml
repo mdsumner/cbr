@@ -33,6 +33,10 @@ navbar:
           href: articles/affine-grids.html
         - text: Burning onto a model's native ocean grid
           href: articles/native-ocean-grid.html
+        - text: -------
+        - text: Topology per cell
+        - text: "Cell predicates: exact all-touched and slivers"
+          href: articles/cell-predicates.html
     crate:
       text: Rust crate
       icon: fa-cube
@@ -111,6 +115,10 @@ articles:
     contents:
       - affine-grids
       - native-ocean-grid
+  - title: Topology per cell
+    navbar: ~
+    contents:
+      - cell-predicates
 
 footer:
   structure:

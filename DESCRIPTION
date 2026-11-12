@@ -21,6 +21,7 @@ Suggests:
     knitr,
     rmarkdown,
     sf,
+    terra,
     testthat (>= 3.0.0),
     ximage
 Config/testthat/edition: 3
