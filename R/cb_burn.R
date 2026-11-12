@@ -19,6 +19,16 @@
 #'   ("approx", fasterize-style) rule, which emits runs only.
 #' @param crs Optional coordinate reference system as a WKT string (or anything
 #'   coercible to character). Carried through to [cb_materialize()] output.
+#' @param parity Logical. By default a multi-part geometry gets one record per
+#'   cell (parts' coverage is summed, and a cell the parts together fill
+#'   becomes a run), and adjacent runs on a row are coalesced. If `TRUE`, give
+#'   the records of the C++ 'controlledburn' core instead: one run per fully
+#'   covered boundary cell and separate records for each part.
+#' @param threads Number of threads, `1` (default) for none, `0` for all
+#'   available. The result is identical to the serial burn. Threads only pay
+#'   for large inputs (the crate uses at most one per 8192 units of work), and
+#'   with more than one thread the input is parsed up front, which uses more
+#'   memory.
 #'
 #' @return An object of class `cb_burn`: a named list of five data frames with
 #'   the grid definition stored in attributes (`extent`, `dimension`, `crs`,
@@ -42,7 +52,8 @@
 #' cb_burn(sq)
 #' }
 #' @export
-cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character_) {
+cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character_,
+                    parity = FALSE, threads = 1L) {
   geom <- wk::as_wkb(geom)
 
   if (missing(extent) || is.null(extent)) {
@@ -70,6 +81,12 @@ cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character
     stop("`dimension` must be positive integers.", call. = FALSE)
   }
 
+  if (length(threads) != 1L || is.na(threads) || threads < 0) {
+    stop("`threads` must be a single non-negative number (0 for all available).",
+         call. = FALSE)
+  }
+  threads <- as.integer(threads)
+
   blobs <- unclass(geom)
 
   res <- cb_burn_wkb(
@@ -77,7 +94,9 @@ cb_burn <- function(geom, extent, dimension, coverage = TRUE, crs = NA_character
     xmin = extent[1L], ymin = extent[3L],
     xmax = extent[2L], ymax = extent[4L],
     ncol = dimension[1L], nrow = dimension[2L],
-    coverage = isTRUE(coverage)
+    coverage = isTRUE(coverage),
+    parity = isTRUE(parity),
+    threads = threads
   )
 
   tables <- lapply(res, function(tbl) {

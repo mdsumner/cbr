@@ -4,7 +4,18 @@
 \alias{cb_burn_wkb}
 \title{Burn WKB geometries onto a regular grid.}
 \usage{
-cb_burn_wkb(wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage)
+cb_burn_wkb(
+  wkb,
+  xmin,
+  ymin,
+  xmax,
+  ymax,
+  ncol,
+  nrow,
+  coverage,
+  parity,
+  threads
+)
 }
 \arguments{
 \item{wkb}{List of raw vectors, one WKB blob per geometry.}
@@ -15,6 +26,14 @@ cb_burn_wkb(wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage)
 
 \item{coverage}{Logical; exact coverage fractions if \code{TRUE}, cell-centre
 rule if \code{FALSE}.}
+
+\item{parity}{Logical; if \code{TRUE} give the C++ core's records exactly: one
+run per fully covered boundary cell (no coalescing) and per-part records
+for multi-part geometries (no merging).}
+
+\item{threads}{Integer; number of threads, \code{0} for all available. With
+more than one the input is parsed up front, and the crate uses at most
+one thread per 8192 units of work, so small burns stay serial.}
 }
 \value{
 A list of five lists (\code{runs}, \code{edges}, \code{lines}, \code{points}, \code{notes}),

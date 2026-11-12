@@ -23,9 +23,15 @@ NULL
 #' @param ncol,nrow Grid dimensions.
 #' @param coverage Logical; exact coverage fractions if `TRUE`, cell-centre
 #'   rule if `FALSE`.
+#' @param parity Logical; if `TRUE` give the C++ core's records exactly: one
+#'   run per fully covered boundary cell (no coalescing) and per-part records
+#'   for multi-part geometries (no merging).
+#' @param threads Integer; number of threads, `0` for all available. With
+#'   more than one the input is parsed up front, and the crate uses at most
+#'   one thread per 8192 units of work, so small burns stay serial.
 #' @return A list of five lists (`runs`, `edges`, `lines`, `points`, `notes`),
 #'   each a set of equal-length columns.
 #' @export
-cb_burn_wkb <- function(wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage) .Call(wrap__cb_burn_wkb, wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage)
+cb_burn_wkb <- function(wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage, parity, threads) .Call(wrap__cb_burn_wkb, wkb, xmin, ymin, xmax, ymax, ncol, nrow, coverage, parity, threads)
 
 # nolint end

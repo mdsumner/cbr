@@ -4,7 +4,15 @@
 \alias{cb_burn}
 \title{Burn geometries onto a regular grid}
 \usage{
-cb_burn(geom, extent, dimension, coverage = TRUE, crs = NA_character_)
+cb_burn(
+  geom,
+  extent,
+  dimension,
+  coverage = TRUE,
+  crs = NA_character_,
+  parity = FALSE,
+  threads = 1L
+)
 }
 \arguments{
 \item{geom}{Geometry input. Anything that \code{\link[wk:as_wkb]{wk::as_wkb()}} understands, e.g. a
@@ -25,6 +33,18 @@ of \code{extent} (at least 1 row). A single value is taken as \code{ncol}, with
 
 \item{crs}{Optional coordinate reference system as a WKT string (or anything
 coercible to character). Carried through to \code{\link[=cb_materialize]{cb_materialize()}} output.}
+
+\item{parity}{Logical. By default a multi-part geometry gets one record per
+cell (parts' coverage is summed, and a cell the parts together fill
+becomes a run), and adjacent runs on a row are coalesced. If \code{TRUE}, give
+the records of the C++ 'controlledburn' core instead: one run per fully
+covered boundary cell and separate records for each part.}
+
+\item{threads}{Number of threads, \code{1} (default) for none, \code{0} for all
+available. The result is identical to the serial burn. Threads only pay
+for large inputs (the crate uses at most one per 8192 units of work), and
+with more than one thread the input is parsed up front, which uses more
+memory.}
 }
 \value{
 An object of class \code{cb_burn}: a named list of five data frames with

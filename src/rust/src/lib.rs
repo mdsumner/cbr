@@ -1,5 +1,35 @@
-use controlledburn::{burn_wkb, BurnOptions, GridSpec};
+use controlledburn::{
+    burn_par, burn_wkb, parse_wkb, BurnError, BurnMode, BurnOptions, BurnResult, Geometry, GridSpec,
+};
 use extendr_api::prelude::*;
+
+fn blob(o: &Robj) -> &[u8] {
+    o.as_raw_slice().unwrap_or(&[])
+}
+
+/// Parse every blob, then burn on `threads` threads (0: all available).
+/// `burn_par` takes parsed geometries, so an empty blob becomes an empty
+/// geometry (no records, id kept). If any blob fails to parse, fall back to
+/// the serial `burn_wkb`, which reports the failure as a note.
+fn burn_wkb_threaded(
+    objs: &[Robj],
+    grid: &GridSpec,
+    opts: BurnOptions,
+    threads: usize,
+) -> std::result::Result<BurnResult, BurnError> {
+    let mut geoms = Vec::with_capacity(objs.len());
+    for o in objs {
+        let b = blob(o);
+        if b.is_empty() {
+            geoms.push(Geometry::MultiPoint(Vec::new()));
+        } else if let Ok(g) = parse_wkb(b) {
+            geoms.push(g);
+        } else {
+            return burn_wkb(objs.iter().map(blob), grid, opts);
+        }
+    }
+    burn_par(&geoms, grid, opts, threads)
+}
 
 /// Burn WKB geometries onto a regular grid.
 ///
@@ -19,6 +49,12 @@ use extendr_api::prelude::*;
 /// @param ncol,nrow Grid dimensions.
 /// @param coverage Logical; exact coverage fractions if `TRUE`, cell-centre
 ///   rule if `FALSE`.
+/// @param parity Logical; if `TRUE` give the C++ core's records exactly: one
+///   run per fully covered boundary cell (no coalescing) and per-part records
+///   for multi-part geometries (no merging).
+/// @param threads Integer; number of threads, `0` for all available. With
+///   more than one the input is parsed up front, and the crate uses at most
+///   one thread per 8192 units of work, so small burns stay serial.
 /// @return A list of five lists (`runs`, `edges`, `lines`, `points`, `notes`),
 ///   each a set of equal-length columns.
 /// @export
@@ -32,6 +68,8 @@ fn cb_burn_wkb(
     ncol: i32,
     nrow: i32,
     coverage: bool,
+    parity: bool,
+    threads: i32,
 ) -> std::result::Result<List, Error> {
     // Keep the list elements alive and borrow their bytes in place rather
     // than copying every blob. Empty / non-raw elements become empty blobs,
@@ -40,14 +78,20 @@ fn cb_burn_wkb(
     let blobs = objs.iter().map(|o| o.as_raw_slice().unwrap_or(&[]));
 
     let grid = GridSpec::new(xmin, ymin, xmax, ymax, ncol as u32, nrow as u32);
-    let opts = if coverage {
-        BurnOptions::coverage()
+    let mode = if coverage { BurnMode::Coverage } else { BurnMode::Approx };
+    let opts = if parity {
+        BurnOptions::parity(mode)
     } else {
-        BurnOptions::approx()
+        BurnOptions::default().with_mode(mode)
     };
 
-    let mut res = burn_wkb(blobs, &grid, opts)
-        .map_err(|e| Error::Other(format!("controlledburn burn failed: {e:?}")))?;
+    let burned = if threads == 1 {
+        burn_wkb(blobs, &grid, opts)
+    } else {
+        burn_wkb_threaded(&objs, &grid, opts, threads.max(0) as usize)
+    };
+    let mut res =
+        burned.map_err(|e| Error::Other(format!("controlledburn burn failed: {e}")))?;
     drop(objs);
 
     // Each column is written straight into a freshly allocated R vector

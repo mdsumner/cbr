@@ -16,6 +16,20 @@ sparse scanline rasterization of polygons, lines, and points.
   WKB rather than copying it. Peak memory for a large burn is about twice the
   result size instead of three times.
 
+* Now built on controlledburn 0.3.1, from crates.io. Notable changes that
+  reach R: multi-part geometries now get one record per cell (parts' coverage
+  is summed, and a cell the parts together fill becomes a run) instead of
+  per-part records, so tables for multipolygons can differ from earlier
+  builds, with the same total coverage; and rings too short to burn, and
+  one-coordinate lines, now get a note instead of being skipped silently.
+
+* `cb_burn(parity = TRUE)` gives the C++ core's records exactly (no run
+  coalescing, per-part records for multi-part geometries).
+
+* `cb_burn(threads = )` burns on several threads via the crate's `burn_par`,
+  with the same result as the serial burn. `0` uses all available threads;
+  the default `1` is serial. Small burns stay serial regardless.
+
 ## Burning
 
 * `cb_burn()` rasterizes any geometry that `wk::as_wkb()` understands onto a
